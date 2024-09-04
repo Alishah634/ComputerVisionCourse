@@ -163,17 +163,17 @@ def Task1(image_points: List[np.ndarray]):
     print("Finished Affine Task 1 part 3 portion:\n")
 
 def Task2(image_points):
-    print("Running Task2")
+    print("Running Task2:")
     '''_____________________________________________For part 1 of Task 2:_____________________________________________'''
     image_points = conv_to_numpy(image_points.copy())
     print(type(image_points)) # DEBUG STATEMENT!!!
     print(type(image_points[0])) # DEBUG STATEMENT!!!
     print(type(image_points[0][0])) # DEBUG STATEMENT!!!
     
-    img1 = cv2.imread('MyImages/board_a.jpg')
-    img2 = cv2.imread('MyImages/board_b.jpg')
-    img3 = cv2.imread('MyImages/board_c.jpg')
-    liam_image = cv2.imread('liam_image.jpg')
+    img1 = cv2.imread('MyImages/board_a.jpeg')
+    img2 = cv2.imread('MyImages/board_b.jpeg')
+    img3 = cv2.imread('MyImages/board_c.jpeg')
+    liam_image = cv2.imread('MyImages/liam_image.jpg')
     
     # Find homography b/w image d) and a), i.e the 1st(0 index, first image) and the 4th image(3 index, last image):
     H_da = compute_homography(image_points[-1], image_points[0])
@@ -207,7 +207,7 @@ def Task2(image_points):
     H_bc = compute_homography(image_points[1], image_points[2])
     H_combination = np.matmul(H_bc, H_ab) 
     res_combination = apply_transform(np.zeros_like(img1), img1, H_combination)
-    cv2.imwrite('task1_part2.jpg' , res_combination) 
+    cv2.imwrite('task2_part2.jpg' , res_combination) 
     print("Finishing Task 2 part 2:")
     
     '''_____________________________________________For part 3 of Task 2:_____________________________________________'''
@@ -228,19 +228,28 @@ def Task2(image_points):
 
 
 if __name__ == '__main__':
-    img_1_a = [    [437,862],  [698,3150], [2391, 2268], [2530, 901] ]   
-    img_2_b = [    [526,1448], [490,2681], [1900,2760],  [1831,833]  ]   
-    img_3_c = [    [1190,575],  [278,1794], [1791,3126],  [2876,2282] ]   
-    img_alex_d = [ [7,6],   [6,652],    [777,659],    [770,6]     ]   
-    image_points = [img_1_a, img_2_b, img_3_c, img_alex_d]
+    # img_1_a = [    [437,862],  [698,3150], [2391, 2268], [2530, 901] ]   
+    # img_2_b = [    [526,1448], [490,2681], [1900,2760],  [1831,833]  ]   
+    # img_3_c = [    [1190,575],  [278,1794], [1791,3126],  [2876,2282] ]   
+    # img_alex_d = [ [7,6],   [6,652],    [777,659],    [770,6]     ]   
+    # image_points = [img_1_a, img_2_b, img_3_c, img_alex_d]
     
     # Task1(image_points)
     
     # Task 2 image points: 
-    img_1_a = [    [437,862 ],  [698,3150], [2391, 2268],  [2530, 901] ]   
-    img_2_b = [    [526,1448],  [490,2681], [1900,2760 ],  [1831,833 ]  ]   
-    img_3_c = [    [1190,575],  [278,1794], [1791,3126 ],  [2876,2282] ]   
-    img_liam = [   [7,6     ],  [6,652   ], [777,659   ],  [770,6    ]     ]   
-    image_points = [img_1_a, img_2_b, img_3_c, img_liam]
+    # P Q R S
+    board_1_a = [    [172,1214 ],  [1364,1285], [1228, 139],  [442, 127] ]   
+    # R S P Q#board_2_b = [    [118,1243],  [1380,1181], [1113,81 ],  [317,90 ]  ]   
+    board_2_b = [    [1113,81 ],  [317,90 ], [189,1240],  [1380,1181],   ]   
+    board_3_c = [    [1104,211],  [368,460], [748,1433 ],  [1361,1143] ]   
+    img_liam = [   [5,6     ],  [2,579   ], [798,578   ],  [798,2   ]     ]   
+    image_points = [board_1_a, board_2_b, board_3_c, img_liam]
     
     Task2(image_points)
+
+    cupboard_1_a = [    [437,862 ],  [698,3150], [2391, 2268],  [2530, 901] ]   
+    cupboard_2_b = [    [526,1448],  [490,2681], [1900,2760 ],  [1831,833 ]  ]   
+    cupboard_3_c = [    [1190,575],  [278,1794], [1791,3126 ],  [2876,2282] ]   
+    img_liam = [   [5,6     ],  [2,579   ], [798,578   ],  [798,2   ]     ]   
+ 
+    image_points = [board_1_a, board_2_b, board_3_c, img_liam]
