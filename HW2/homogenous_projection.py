@@ -4,8 +4,9 @@ from typing import List
 from skimage.draw import polygon
 import numpy as np
 import cv2
-from typing import List
+from typing import List, Tuple
 
+'''Util function for converting to numpy array'''
 def conv_to_numpy(conv: List[List[np.ndarray]]) -> List[List[np.ndarray]]:
     for points in conv:
         points = np.array(points).flatten()         
@@ -13,10 +14,12 @@ def conv_to_numpy(conv: List[List[np.ndarray]]) -> List[List[np.ndarray]]:
         print(f"\n\n\nPoints After ->  P: {points[0]} ,Q:{points[1]} ,R:{points[2]} ,S:{points[3]}\n") # DEBUG STATEMENT!!!
     return conv
 
+'''Util function for printing out a formatted numpy array'''
 def print_matrix(matrix: np.ndarray):
     for row in matrix:
         print(" ".join(f"{value: .3f}" for value in row))
-        
+
+'''Util function for converting to numpy array'''    
 def compute_homography(src_pts: np.ndarray, dest_pts: np.ndarray) -> np.ndarray:
     def construct_matrix_A(src_pts: np.ndarray, dst_pts: np.ndarray) -> np.ndarray:
         A = np.zeros((8, 8))
@@ -39,39 +42,91 @@ def compute_homography(src_pts: np.ndarray, dest_pts: np.ndarray) -> np.ndarray:
         H = np.eye(3)  # Return identity matrix as fallback
     return H
 
-def get_roi_map(pts, dest_img, dest_img_name, src_img_name):
-    roi_map = np.zeros((dest_img.shape[0], dest_img.shape[1]))
-    pts = np.array(pts)  # Convert to numpy array for easier slicing
-    col = pts[:, 0]
-    row = pts[:, 1]
-    rows, cols = polygon(row, col)
-    roi_map[rows, cols] = 255
-    filename = f'roi_{src_img_name}_to_{dest_img_name}.jpg'
-    cv2.imwrite(filename, roi_map)
-    return roi_map
+def create_roi_mask(points: List[List[int]], target_image: np.ndarray, target_img_name: str, source_img_name: str) -> np.ndarray:
+    """Create an empty mask for the ROI of the given image dimensions."""
+    def generate_mask(image_shape: Tuple[int, int]) -> np.ndarray:
+        height, width = image_shape
+        return np.zeros((height, width), dtype=np.uint8)
 
-def apply_transform(dest_img, source_img, H, roi_map= None):
-    dest = np.copy(dest_img)
-    (W_s, H_s) = source_img.shape[0:2]
-    (W_d, H_d) = dest_img.shape[0:2]
-    if roi_map is None:
-        for i in range(H_d):
-            for j in range(W_d):
-                x_hc = [i, j, 1]
-                xp_hc = np.dot(np.linalg.inv(H), x_hc)  # inverting H for inverse homography
-                xp = (xp_hc / xp_hc[2]).astype(int)
-                if 0 <= xp[1] < W_s and 0 <= xp[0] < H_s:
-                    dest[j, i] = source_img[xp[1], xp[0]]
+    """Extract row and column coordinates from the provided points."""
+    def extract_polygon_coordinates(points: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        columns = points[:, 0]
+        rows = points[:, 1]
+        return rows, columns
+
+    """Draw the polygon on the provided mask using row and column coordinates."""
+    def draw_polygon_on_mask(mask: np.ndarray, rows: np.ndarray, columns: np.ndarray) -> None:
+        rr, cc = polygon(rows, columns)
+        mask[rr, cc] = 255
+
+    """Save the generated mask as an image file."""
+    def save_mask_image(mask: np.ndarray, filename: str) -> None:
+        cv2.imwrite(filename, mask)
+
+    # Step 1: Create an empty mask based on the target image shape
+    mask = generate_mask(target_image.shape[:2])
+
+    # Step 2: Convert points to numpy array and extract coordinates
+    points_np = np.array(points)
+    rows, cols = extract_polygon_coordinates(points_np)
+
+    # Step 3: Draw the polygon on the mask
+    draw_polygon_on_mask(mask, rows, cols)
+
+    # Step 4: Save the mask as an image
+    mask_filename = f'roi_{source_img_name}_to_{target_img_name}.jpg'
+    save_mask_image(mask, mask_filename)
+
+    return mask
+
+
+def apply_homography_transform(roi_mask: (None | np.ndarray), src_image: np.ndarray, dst_image: np.ndarray, homography_matrix: np.ndarray) -> np.ndarray:
+    """Applies the homography transformation to a region of interest (ROI) in the destination image."""
+    
+    def get_image_dimensions(image: np.ndarray) -> Tuple[int, int]:
+        """Return the width and height of the image."""
+        return image.shape[1], image.shape[0]
+
+    def transform_pixel_location(h_matrix: np.ndarray, x: int, y: int) -> np.ndarray:
+        """Apply inverse homography to the pixel location (x, y)."""
+        pixel_coords = [x, y, 1]
+        transformed_coords = np.dot(np.linalg.inv(h_matrix), pixel_coords)
+        return (transformed_coords / transformed_coords[2]).astype(int)
+
+    def copy_transformed_pixel_to_dest(source_img: np.ndarray, dest_img: np.ndarray, src_x: int, src_y: int, dst_x: int, dst_y: int) -> None:
+        """Copy the transformed pixel from the source image to the destination image if within bounds."""
+        if 0 <= src_x < source_img.shape[1] and 0 <= src_y < source_img.shape[0]:
+            dest_img[dst_y, dst_x] = source_img[src_y, src_x]
+
+    def apply_homography_transform_to_mask(roi: np.ndarray, src_img: np.ndarray, dest_img: np.ndarray, h_matrix: np.ndarray) -> np.ndarray:
+        """Apply the transformation to pixels only within the ROI."""
+        width, height = get_image_dimensions(dest_img)
+        for y in range(height):
+            for x in range(width):
+                if roi[y, x] == 255:  # Apply only within ROI
+                    transformed_coords = transform_pixel_location(h_matrix, x, y)
+                    copy_transformed_pixel_to_dest(src_img, dest_img, transformed_coords[0], transformed_coords[1], x, y)
+        return dest_img
+
+    def apply_homography_transform(src_img: np.ndarray, dest_img: np.ndarray, h_matrix: np.ndarray) -> np.ndarray:
+        """Apply homography transformation to the entire destination image when there is no ROI."""
+        width, height = get_image_dimensions(dest_img)
+        for y in range(height):
+            for x in range(width):
+                transformed_coords = transform_pixel_location(h_matrix, x, y)
+                copy_transformed_pixel_to_dest(src_img, dest_img, transformed_coords[0], transformed_coords[1], x, y)
+        return dest_img
+    
+    # Step 1: Copy the destination image to avoid modifying the original
+    result_image = np.copy(dst_image)
+
+    # Step 2: Check if ROI mask is provided, otherwise apply to the entire image
+    if roi_mask is not None:
+        result_image = apply_homography_transform_to_mask(roi_mask, src_image, result_image, homography_matrix)
     else:
-        for i in range(H_d):
-            for j in range(W_d):
-                if roi_map[j, i] == 255:
-                    x_hc = [i, j, 1]
-                    xp_hc = np.dot(np.linalg.inv(H), x_hc)  # inverting H for inverse homography
-                    xp = (xp_hc / xp_hc[2]).astype(int)
-                    if 0 <= xp[1] < W_s and 0 <= xp[0] < H_s:
-                        dest[j, i] = source_img[xp[1], xp[0]]
-    return dest
+        result_image = apply_homography_transform(src_image, result_image, homography_matrix)
+
+    return result_image
 
 def compute_affine_transform(src_pts: np.ndarray, dest_pts: np.ndarray) -> np.ndarray:
     # Convert lists to numpy arrays 
@@ -121,15 +176,14 @@ def Task1(image_points: List[np.ndarray]):
     print(f"Calculated Homography\n")
 
     # Find the region of interest:
-    img_1_roi = get_roi_map(image_points[0], img1, 'img_1_a', 'alex_image')
-    img_2_roi = get_roi_map(image_points[1], img2, 'img_2_b', 'alex_image')
-    img_3_roi = get_roi_map(image_points[2], img3, 'img_3_c', 'alex_image')
+    img_1_roi = create_roi_mask(image_points[0], img1, 'img_1_a', 'alex_image')
+    img_2_roi = create_roi_mask(image_points[1], img2, 'img_2_b', 'alex_image')
+    img_3_roi = create_roi_mask(image_points[2], img3, 'img_3_c', 'alex_image')
     print(f"Found ROI\n")
-    
     # Apply the transforms:
-    res_da = apply_transform(img1, alex_image, H_da)
-    res_db = apply_transform(img2, alex_image, H_db)
-    res_dc = apply_transform(img3, alex_image, H_dc)
+    res_da = apply_homography_transform(img_1_roi, alex_image, img1, H_da)
+    res_db = apply_homography_transform(img_2_roi, alex_image, img2, H_db)
+    res_dc = apply_homography_transform(img_3_roi, alex_image, img3, H_dc)
     print(f"Applied Transform")
     
     #  Write the result to the images:
@@ -142,8 +196,9 @@ def Task1(image_points: List[np.ndarray]):
     print("Starting Task 1 part 2:")
     H_ab = compute_homography(image_points[0], image_points[1])
     H_bc = compute_homography(image_points[1], image_points[2])
+    # roi_combination = create_roi_mask(image_points[0], img1, 'img_1_a', 'img_2_b')  # Adjust the ROI if needed
     H_combination = np.matmul(H_bc, H_ab) 
-    res_combination = apply_transform(np.zeros_like(img1), img1, H_combination)
+    res_combination = apply_homography_transform(None, img1, np.zeros_like(img1), H_combination)
     cv2.imwrite('task1_part2.jpg' , res_combination) 
     print("Finishing Task 1 part 2:")
     
@@ -153,9 +208,9 @@ def Task1(image_points: List[np.ndarray]):
     H_affine_db = compute_affine_transform(image_points[-1], image_points[1])
     H_affine_dc = compute_affine_transform(image_points[-1], image_points[2])
     
-    res_affine_da = apply_transform(img1, alex_image, H_affine_da, img_1_roi)
-    res_affine_db = apply_transform(img2, alex_image, H_affine_db, img_2_roi)
-    res_affine_dc = apply_transform(img3, alex_image, H_affine_dc, img_3_roi)
+    res_affine_da = apply_homography_transform(img_1_roi, alex_image, img1, H_affine_da)
+    res_affine_db = apply_homography_transform(img_2_roi, alex_image, img2, H_affine_db)
+    res_affine_dc = apply_homography_transform(img_3_roi, alex_image, img3, H_affine_dc)
     
     cv2.imwrite('proj_affine_d_to_a.jpg', res_affine_da)
     cv2.imwrite('proj_affine_d_to_b.jpg', res_affine_db)
@@ -184,15 +239,15 @@ def Task2(image_points):
     print(f"Calculated Homography\n")
 
     # Find the region of interest:
-    img_1_roi = get_roi_map(image_points[0], img1, 'board_a', 'liam_image')
-    img_2_roi = get_roi_map(image_points[1], img2, 'board_b', 'liam_image')
-    img_3_roi = get_roi_map(image_points[2], img3, 'board_c', 'liam_image')
+    img_1_roi = create_roi_mask(image_points[0], img1, 'board_a', 'liam_image')
+    img_2_roi = create_roi_mask(image_points[1], img2, 'board_b', 'liam_image')
+    img_3_roi = create_roi_mask(image_points[2], img3, 'board_c', 'liam_image')
     print(f"Found ROI\n")
     
     # Apply the transforms:
-    res_da = apply_transform(img1, liam_image, H_da)
-    res_db = apply_transform(img2, liam_image, H_db)
-    res_dc = apply_transform(img3, liam_image, H_dc)
+    res_da = apply_homography_transform(img_1_roi, liam_image, img1, H_da)
+    res_db = apply_homography_transform(img_2_roi, liam_image, img2, H_db)
+    res_dc = apply_homography_transform(img_3_roi, liam_image, img3, H_dc)
     print(f"Applied Transform")
     
     # Write the result to the images:
@@ -205,8 +260,9 @@ def Task2(image_points):
     print("Starting Task 2 part 2:")
     H_ab = compute_homography(image_points[0], image_points[1])
     H_bc = compute_homography(image_points[1], image_points[2])
+    # roi_combination = create_roi_mask(image_points[0], img1, 'img_1_a', 'img_2_b')  # Adjust the ROI if needed
     H_combination = np.matmul(H_bc, H_ab) 
-    res_combination = apply_transform(np.zeros_like(img1), img1, H_combination)
+    res_combination = apply_homography_transform(None, img1, np.zeros_like(img1),  H_combination)
     cv2.imwrite('task2_part2.jpg' , res_combination) 
     print("Finishing Task 2 part 2:")
     
@@ -216,9 +272,9 @@ def Task2(image_points):
     H_affine_db = compute_affine_transform(image_points[-1], image_points[1])
     H_affine_dc = compute_affine_transform(image_points[-1], image_points[2])
     
-    res_affine_da = apply_transform(img1, liam_image, H_affine_da, img_1_roi)
-    res_affine_db = apply_transform(img2, liam_image, H_affine_db, img_2_roi)
-    res_affine_dc = apply_transform(img3, liam_image, H_affine_dc, img_3_roi)
+    res_affine_da = apply_homography_transform(img_1_roi, liam_image, img1, H_affine_da)
+    res_affine_db = apply_homography_transform(img_2_roi, liam_image, img2, H_affine_db)
+    res_affine_dc = apply_homography_transform(img_3_roi, liam_image, img3, H_affine_dc)
     
     cv2.imwrite('proj_affine_laim_to_a.jpg', res_affine_da)
     cv2.imwrite('proj_affine_laim_to_b.jpg', res_affine_db)
