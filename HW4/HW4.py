@@ -32,8 +32,8 @@ from termcolor import cprint
 from scipy.ndimage import convolve
 import matplotlib.pyplot as plt
 
-# Custom Sobel function with correct padding and handling
-def custom_sobel(img: np.ndarray, axis: str) -> np.ndarray:
+# Sobel function with correct padding and handling
+def calc_sobel(img: np.ndarray, axis: str) -> np.ndarray:
     """Manually apply Sobel filter in the specified axis (x or y)."""
     if axis == 'x':
         sobel_x = np.array([[-1, 0, 1], 
@@ -81,8 +81,8 @@ def apply_convolution(img: np.ndarray, kernel: np.ndarray) -> np.ndarray:
 def Harris_Corner_Detection(image_pair, sigma: int, pair_name: str):
     def Corner_Detection(img_gray, img_color, sigma, pair_num: str, k=0.05):
         # Compute gradients using the custom Sobel function
-        dx = custom_sobel(img_gray, axis='x')
-        dy = custom_sobel(img_gray, axis='y')
+        dx = calc_sobel(img_gray, axis='x')
+        dy = calc_sobel(img_gray, axis='y')
 
         # Compute gradient products
         dx2 = dx ** 2
@@ -105,16 +105,17 @@ def Harris_Corner_Detection(image_pair, sigma: int, pair_name: str):
         R = det - k * trace ** 2  # Harris response function
 
         # Thresholding and non-maximal suppression
-        R_thresh = 0.01 * np.max(R)
+        # Adjust the threshold value to decide the number of corner points found
+        R_thresh = 0.1 * np.max(R) 
         mask = np.ones(R.shape)
         mask[R < 0] = 0
         corners = []
-        win_size = 15
-        half_win = int(win_size / 2)
-        for x in range(half_win, img_gray.shape[1] - half_win):
-            for y in range(half_win, img_gray.shape[0] - half_win):
+        window_size = 15
+        half_window_size = int(window_size / 2)
+        for x in range(half_window_size, img_gray.shape[1] - half_window_size):
+            for y in range(half_window_size, img_gray.shape[0] - half_window_size):
                 if mask[y, x] > 0:
-                    local_max = np.amax(R[y - half_win:y + half_win + 1, x - half_win:x + half_win + 1])
+                    local_max = np.amax(R[y - half_window_size:y + half_window_size + 1, x - half_window_size:x + half_window_size + 1])
                     if R[y, x] == local_max and R[y, x] > R_thresh:
                         corners.append([x, y])
 
