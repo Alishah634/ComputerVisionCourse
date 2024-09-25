@@ -30,8 +30,9 @@ And to establish the point-to-point correspondences between the two views, you w
 def ensure_directory(path):
     if not os.path.exists(path):
         os.makedirs(path)
+'''START OF HARRIS CORNER TASK!'''
 
-''' SECTION FOR NCC AND SSD METRICS: '''
+''' START OF SECTION FOR NCC AND SSD METRICS: '''
 # SSD Metric
 def calc_SSD(patch1: np.ndarray, patch2: np.ndarray) -> float:
     """Calculates the Sum of Squared Differences between two patches."""
@@ -90,7 +91,7 @@ def find_correspondences_SSD(img1: np.ndarray, img2: np.ndarray, corners1: List[
     return correspondences
 
 # Visualize correspondences between images
-def visualize_correspondences(image_pair, correspondences, folder_path, method_name, sigma):
+def visualize_correspondences(image_pair, correspondences, folder_path, method_name, sigma, pair_name: str):
     img1_color = image_pair[0].copy()
     img2_color = image_pair[1].copy()
     img_combined = np.hstack((img1_color, img2_color))
@@ -109,10 +110,10 @@ def visualize_correspondences(image_pair, correspondences, folder_path, method_n
             random_color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
             cv2.line(img_combined, tuple(pt1), tuple(pt2_offset), random_color, thickness= line_thickness)
     ensure_directory(folder_path)
-    cv2.imwrite(f"{folder_path}/{method_name}_Correspondences_Sigma_{sigma}.jpg", img_combined)
-''' SECTION FOR NCC AND SSD METRICS: '''
+    cv2.imwrite(f"{folder_path}/{method_name}_Correspondences_{pair_name}_Sigma_{sigma}.jpg", img_combined)
+''' END OF SECTION FOR NCC AND SSD METRICS: '''
 
-
+'''START OF HARRIS CORNERS HELPERS'''
 # Sobel function with correct padding and handling
 def calc_sobel(img: np.ndarray, axis: str) -> np.ndarray:
     """Manually apply Sobel filter in the specified axis (x or y)."""
@@ -157,6 +158,7 @@ def apply_convolution(img: np.ndarray, kernel: np.ndarray) -> np.ndarray:
             output_img[i, j] = np.sum(roi * kernel)
     
     return output_img
+'''END OF HARRIS CORNERS HELPERS'''
 
 # Harris Corner Detection function
 def Harris_Corner_Detection(image_pair, sigma: int, pair_name: str):
@@ -237,14 +239,43 @@ def Harris_Corner_Detection(image_pair, sigma: int, pair_name: str):
     
     # Visualize correspondences (NCC and SSD)
     folder_path = f"MyResults/Harris_Corner/Sigma_{sigma}"    
-    visualize_correspondences(image_pair, ncc_correspondences, folder_path, "NCC", sigma)
+    visualize_correspondences(image_pair, ncc_correspondences, folder_path, "NCC", sigma, pair_name)
     cprint(f"Visualized correspondences for NCC Metrics", "green")
-    visualize_correspondences(image_pair, ssd_correspondences, folder_path, "SSD", sigma)
+    visualize_correspondences(image_pair, ssd_correspondences, folder_path, "SSD", sigma, pair_name)
     cprint(f"Visualized correspondences for SSD Metrics", "green")
     return corners_img1, corners_img2
+'''END OF HARRIS CORNER TASK!'''
 
-# Main code to run Harris Corner Detection on image pairs
+'''START OF THE SIFT SURF USING OPENCV:'''
+def OpenCV_SIFT_SURF(image_pair, pair_name: str):
+    # Input images
+    img1, img2 = image_pair
+    # Convert the images to grayscale
+    img1_gray = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+    img2_gray = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+    # Create a SIFT detector object
+    sift = cv2.SIFT_create()
+    # Detect keypoints and compute descriptors for both images
+    keypoints_img1, descriptor_img1 = sift.detectAndCompute(img1_gray, None) 
+    keypoints_img2, descriptor_img2 = sift.detectAndCompute(img2_gray, None) 
+    # Use BFMatcher to find the best matches between the descriptors
+    bf = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
+    combined_image = cv2.drawMatches(img1, keypoints_img1, img2, keypoints_img2, sorted((cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)).match(descriptor_img1, descriptor_img2), key=lambda x: x.distance)[:100], None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+    # Create a results folder if it doesn't exist
+    folder_path = f"MyResults/SIFT_SURF/"
+    ensure_directory(folder_path)
+    # Save the resulting image with correspondences
+    cv2.imwrite(f"{folder_path}_SIFT_{pair_name}.jpg", combined_image)
+    cprint(f"Saved SIFT Correspondences for pair {pair_name}\n", "green")
+
+'''END OF THE SIFT SURF USING OPENCV:'''
+
+
 if __name__ == '__main__':
+    # Decide which task you are going to run:
+    run_harris = True    
+    run_SIFT = True    
+    
     # Preprocessing and loading of variables:
     # Individual Images
     img_hovde_2 = cv2.imread('HW4_images/hovde_2.jpg')
@@ -260,9 +291,17 @@ if __name__ == '__main__':
     given_img_pairs = [hovde_pair, temple_pair]
     given_img_names = ["hovde", "temple"]
 
-    # TASK 1; Harris Corner Detection:
-    sigmas = [0.8, 1.2, 1.6, 2.0]
-    for sigma in sigmas:
-        for image_pair, img_name in zip(given_img_pairs, given_img_names):
-            corners1, corners2 = Harris_Corner_Detection(image_pair, sigma, img_name)
-            print(f"Corners in first image: {len(corners1)}, Corners in second image: {len(corners2)}")
+    # TASK 1: Harris Corner Detection:
+    if run_harris:
+        sigmas = [0.8, 1.2, 1.6, 2.0]
+        for sigma in sigmas:
+            for image_pair, img_name in zip(given_img_pairs, given_img_names):
+                cprint(f"{img_name}", "cyan") # DEBUG STATEMENT!!!
+                corners1, corners2 = Harris_Corner_Detection(image_pair, sigma, img_name)
+                print(f"Corners in first image: {len(corners1)}, Corners in second image: {len(corners2)}")
+    
+    # Task 1: SIFT SURF using OPENCV:
+    if run_SIFT:
+        OpenCV_SIFT_SURF(given_img_pairs[0], given_img_names[0])
+        OpenCV_SIFT_SURF(given_img_pairs[1], given_img_names[1])
+     
