@@ -9,6 +9,8 @@ import os
 import random
 
 '''
+TASKS:
+
 Implement an automated approach for interest point detection and correspondence search for a given pair of images of the
 same scene.
 
@@ -22,78 +24,78 @@ And to establish the point-to-point correspondences between the two views, you w
 (Normalized Cross Correlation) as the feature similarity measures.
 
 2. Test the GNN-based SuperGlue [2] feature matching network.
-
 '''
-
-
 # Create a folder if it does not exist
 def ensure_directory(path):
     if not os.path.exists(path):
         os.makedirs(path)
-'''START OF HARRIS CORNER TASK!'''
+        
+'''===================================================START OF HARRIS CORNER TASK!==================================================='''
 
 ''' START OF SECTION FOR NCC AND SSD METRICS: '''
 # SSD Metric
 def calc_SSD(patch1: np.ndarray, patch2: np.ndarray) -> float:
-    """Calculates the Sum of Squared Differences between two patches."""
     return np.sum((patch1 - patch2) ** 2)
 
 # NCC Metric
 def calc_NCC(patch1: np.ndarray, patch2: np.ndarray) -> float:
-    """Calculates the Normalized Cross-Correlation between two patches."""
-    patch1 = patch1 - np.mean(patch1)
-    patch2 = patch2 - np.mean(patch2)
+    patch1, patch2  = patch1 - np.mean(patch1), patch2 - np.mean(patch2)
     numerator = np.sum(patch1 * patch2)
     denominator = np.sqrt(np.sum(patch1 ** 2) * np.sum(patch2 ** 2))
     if denominator == 0:
         return 0
     return numerator / denominator
 
-# Extract Patch around a given point
+# Extract the Patch around a given point:
 def extract_patch(img: np.ndarray, point: Tuple[int, int], patch_size: int = 5) -> np.ndarray:
-    """Extracts a patch of size patch_size x patch_size around the given point."""
+    # 5 by 5 patch, adjust patch_size to change this:
     half_size = patch_size // 2
     x, y = point
     return img[y - half_size:y + half_size + 1, x - half_size:x + half_size + 1]
 
-# Find correspondences using NCC
-def find_correspondences_NCC(img1: np.ndarray, img2: np.ndarray, corners1: List[Tuple[int, int]], corners2: List[Tuple[int, int]], patch_size: int = 5):
+# Find correspondences using NCC:
+def find_NCC_correspondences(img1: np.ndarray, img2: np.ndarray, corners1: List[Tuple[int, int]], corners2: List[Tuple[int, int]], patch_size: int = 5):
     correspondences = []
     for point1 in corners1:
-        best_match = None
-        best_score = -1
+        best_match, best_score = None, -1
         patch1 = extract_patch(img1, point1, patch_size)
         for point2 in corners2:
             patch2 = extract_patch(img2, point2, patch_size)
             if patch1.shape == patch2.shape:
                 score = calc_NCC(patch1, patch2)
                 if score > best_score:
-                    best_score = score
-                    best_match = point2
+                    best_score, best_match = score, point2
         correspondences.append((point1, best_match))
     return correspondences
 
 # Find correspondences using SSD
-def find_correspondences_SSD(img1: np.ndarray, img2: np.ndarray, corners1: List[Tuple[int, int]], corners2: List[Tuple[int, int]], patch_size: int = 5):
-    correspondences = []
+def find_SSD_correspondences(img1: np.ndarray, img2: np.ndarray, corners1: List[Tuple[int, int]], corners2: List[Tuple[int, int]], patch_size: int = 5):
+    correspondences = list()
     for point1 in corners1:
-        best_match = None
-        best_score = float('inf')
+        best_match, best_score = None, float('inf')
         patch1 = extract_patch(img1, point1, patch_size)
         for point2 in corners2:
             patch2 = extract_patch(img2, point2, patch_size)
             if patch1.shape == patch2.shape:
                 score = calc_SSD(patch1, patch2)
                 if score < best_score:
-                    best_score = score
-                    best_match = point2
+                    best_score, best_match = score, point2
         correspondences.append((point1, best_match))
     return correspondences
 
 # Visualize correspondences between images
-def visualize_correspondences(image_pair, correspondences, folder_path, method_name, sigma, pair_name: str):
-    img1_color = image_pair[0].copy()
-    img2_color = image_pair[1].copy()
+def visualize_correspondences(image_pair, correspondences, folder_path, method_name, sigma, pair_name):
+    img1_color, img2_color = image_pair[0].copy(), image_pair[1].copy()
+    
+    # Resize images to have the same height before concatenation:
+    height1, width1, _ = img1_color.shape
+    height2, width2, _ = img2_color.shape
+    if height1 != height2:
+        # Resize img2 to match the height of img1 
+        # (This is a little dumb but works, note to self, make this shrink the larger image to the smaller image size) 
+        # Here i just assume the second image needs to be resized
+        img2_color = cv2.resize(img2_color, (width2, height1))
+
     img_combined = np.hstack((img1_color, img2_color))
 
     for (pt1, pt2) in correspondences:
@@ -101,14 +103,13 @@ def visualize_correspondences(image_pair, correspondences, folder_path, method_n
             # Offset for the second image points
             pt2_offset = (pt2[0] + img1_color.shape[1], pt2[1])
             # Draw red circles around points
-            circle_thickness = -2 # Filled circles
-            cv2.circle(img_combined, tuple(pt1), 4, (0, 0, 255), thickness= circle_thickness) # For img1
-            cv2.circle(img_combined, tuple(pt2_offset), 4, (0, 0, 255), thickness= circle_thickness)  # For img2
-            
-            # Draw random color lines between each of the images points
+            circle_thickness = -2  # Filled circles
+            cv2.circle(img_combined, tuple(pt1), 4, (0, 0, 255), thickness=circle_thickness)  # For img1
+            cv2.circle(img_combined, tuple(pt2_offset), 4, (0, 0, 255), thickness=circle_thickness)  # For img2
+            # Draw random color lines between each of the image points
             line_thickness = 1
             random_color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-            cv2.line(img_combined, tuple(pt1), tuple(pt2_offset), random_color, thickness= line_thickness)
+            cv2.line(img_combined, tuple(pt1), tuple(pt2_offset), random_color, thickness=line_thickness)
     ensure_directory(folder_path)
     cv2.imwrite(f"{folder_path}/{method_name}_Correspondences_{pair_name}_Sigma_{sigma}.jpg", img_combined)
 ''' END OF SECTION FOR NCC AND SSD METRICS: '''
@@ -116,39 +117,32 @@ def visualize_correspondences(image_pair, correspondences, folder_path, method_n
 '''START OF HARRIS CORNERS HELPERS'''
 # Sobel function with correct padding and handling
 def calc_sobel(img: np.ndarray, axis: str) -> np.ndarray:
-    """Manually apply Sobel filter in the specified axis (x or y)."""
+    # If the axis is X, then apply the sobel filter for the x axis, then apply the following convolution:
     if axis == 'x':
         sobel_x = np.array([[-1, 0, 1], 
                             [-2, 0, 2], 
                             [-1, 0, 1]])
         return apply_convolution(img, sobel_x)
-    
+    # If the axis is Y, then apply the sobel filter for the y axis, then apply the following convolution:
     elif axis == 'y':
         sobel_y = np.array([[-1, -2, -1], 
                             [0,  0,  0], 
                             [1,  2,  1]])
         return apply_convolution(img, sobel_y)
-    
     else:
         raise ValueError("Invalid axis. Use either 'x' or 'y'.")
 
 # Helper function to apply convolution manually
 def apply_convolution(img: np.ndarray, kernel: np.ndarray) -> np.ndarray:
-    """Applies convolution manually to avoid the clustering issue."""
     # Get dimensions of the kernel and the image
     k_height, k_width = kernel.shape
     img_height, img_width = img.shape
-    
     # Calculate padding size
-    pad_height = k_height // 2
-    pad_width = k_width // 2
-    
+    pad_height, pad_width  = k_height // 2, k_width // 2
     # Pad the image to handle boundaries
     padded_img = np.pad(img, ((pad_height, pad_height), (pad_width, pad_width)), mode='reflect')
-    
     # Create an output image to store the result
     output_img = np.zeros_like(img, dtype=np.float64)
-    
     # Convolution process
     for i in range(img_height):
         for j in range(img_width):
@@ -156,20 +150,18 @@ def apply_convolution(img: np.ndarray, kernel: np.ndarray) -> np.ndarray:
             roi = padded_img[i:i+k_height, j:j+k_width]
             # Perform element-wise multiplication and sum the result
             output_img[i, j] = np.sum(roi * kernel)
-    
     return output_img
 '''END OF HARRIS CORNERS HELPERS'''
 
 # Harris Corner Detection function
 def Harris_Corner_Detection(image_pair, sigma: int, pair_name: str):
     def Corner_Detection(img_gray, img_color, sigma, pair_num: str, k=0.05):
-        # Compute gradients using the custom Sobel function
+        # Compute gradients using the Sobel function
         dx = calc_sobel(img_gray, axis='x')
         dy = calc_sobel(img_gray, axis='y')
 
         # Compute gradient products
-        dx2 = dx ** 2
-        dy2 = dy ** 2
+        dx2, dy2 = dx ** 2, dy ** 2
         dxdy = dx * dy
 
         # Gaussian window for summing the products
@@ -183,6 +175,7 @@ def Harris_Corner_Detection(image_pair, sigma: int, pair_name: str):
         sum12 = convolve(dxdy, kernel, mode='reflect')
 
         # Harris corner response calculation (trace, determinant)
+        # This class has too much linear :( 
         trace = sum11 + sum22
         det = sum11 * sum22 - sum12 ** 2
         R = det - k * trace ** 2  # Harris response function
@@ -220,21 +213,19 @@ def Harris_Corner_Detection(image_pair, sigma: int, pair_name: str):
     img2_color = image_pair[1].copy()
 
     # Apply Harris Corner Detection on both images
-    cprint(f"---Harris Corners using a sigma of : {sigma} ---", "white")
+    cprint(f"---Harris Corners using a sigma of, best_score : {sigma} ---", "white")
     corners_img1 = Corner_Detection(img1_gray, img1_color, sigma, "1")
     cprint(f"Corners of first image in pair {pair_name} found!", "green")
     
     corners_img2 = Corner_Detection(img2_gray, img2_color, sigma, "2")
     cprint(f"Corners of second image in pair {pair_name} found!", "green")
     
-    
-    # Finding the NCC and SSD metric between the pair of images for each of the following harris corner images: 
-    # Calculate correspondences using NCC and SSD
+    # Finding, best_match the NCC and SSD metric between the pair of images for each of the following harris corner images: , correspondences using NCC and SSD
     cprint(f"Finding Correspondences for Sigma: {sigma}", "white")
     patch_size = 5    
-    ncc_correspondences = find_correspondences_NCC(img1_gray, img2_gray, corners_img1, corners_img2, patch_size)
+    ncc_correspondences = find_NCC_correspondences(img1_gray, img2_gray, corners_img1, corners_img2, patch_size)
     cprint(f"Found the correspondences for NCC Metrics", "green")
-    ssd_correspondences = find_correspondences_SSD(img1_gray, img2_gray, corners_img1, corners_img2, patch_size)
+    ssd_correspondences = find_SSD_correspondences(img1_gray, img2_gray, corners_img1, corners_img2, patch_size)
     cprint(f"Found the correspondences for SSD Metrics", "green")
     
     # Visualize correspondences (NCC and SSD)
@@ -267,14 +258,13 @@ def OpenCV_SIFT_SURF(image_pair, pair_name: str):
     # Save the resulting image with correspondences
     cv2.imwrite(f"{folder_path}_SIFT_{pair_name}.jpg", combined_image)
     cprint(f"Saved SIFT Correspondences for pair {pair_name}\n", "green")
-
 '''END OF THE SIFT SURF USING OPENCV:'''
 
 
 if __name__ == '__main__':
     # Decide which task you are going to run:
-    run_harris = True    
-    run_SIFT = True    
+    run_harris = False   
+    run_SIFT =   False
     
     # Preprocessing and loading of variables:
     # Individual Images
@@ -304,4 +294,27 @@ if __name__ == '__main__':
     if run_SIFT:
         OpenCV_SIFT_SURF(given_img_pairs[0], given_img_names[0])
         OpenCV_SIFT_SURF(given_img_pairs[1], given_img_names[1])
-     
+    
+    #######################################-----------------TASK 2: -----------------##################################################
+    # Task 2: Harris Corner Detection: 
+    # My images:
+    myimage_garage_pairs = (cv2.imread('MyImages/Garage_2.jpeg'), cv2.imread('MyImages/Garage_3.jpeg'))
+    myimage_HKN_pairs = (cv2.imread('MyImages/HKN_2.jpeg'), cv2.imread('MyImages/HKN_3.jpeg'))
+    
+    myimage_pairs = [myimage_garage_pairs, myimage_HKN_pairs]
+    myimage_names = ["garage", "HKN"]
+    
+    my_harris = True
+    my_sift = True
+    if my_harris:
+        sigmas = [0.8, 1.2, 1.6, 2.0]
+        for sigma in sigmas:
+            for image_pair, img_name in zip(myimage_pairs, myimage_names):
+                cprint(f"{img_name}", "cyan") # DEBUG STATEMENT!!!
+                corners1, corners2 = Harris_Corner_Detection(image_pair, sigma, img_name)
+                print(f"Corners in first image: {len(corners1)}, Corners in second image: {len(corners2)}")
+    
+    # Task 2: SIFT SURF using OPENCV:
+    if my_sift:
+        OpenCV_SIFT_SURF(myimage_pairs[0], myimage_names[0])
+        OpenCV_SIFT_SURF(myimage_pairs[1], myimage_names[1])
