@@ -81,7 +81,6 @@ def OpenCV_SIFT_SURF(image_pair, pair_name: str):
     cprint(f"Saved SIFT Correspondences for pair {pair_name}", "green")
     
     # Return the corresponding points (keypoints)
-    # return sorted(points_img1), sorted(points_img2)
     return points_img1, points_img2
 '''END OF THE SIFT SURF USING OPENCV (TAKEN FROM HW4):'''
 
