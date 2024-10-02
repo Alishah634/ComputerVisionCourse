@@ -53,7 +53,7 @@ def OpenCV_SIFT_SURF(image_pair, pair_name: str):
     matches = sorted(matches, key=lambda x: x.distance)
 
     # Draw the matches (or fewer if there are not that many matches)
-    combined_image = cv2.drawMatches(img1, keypoints_img1, img2, keypoints_img2, matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+    combined_image = cv2.drawMatches(img1, keypoints_img1, img2, keypoints_img2, matches[:10], None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
 
     # Store the points for later use:
     # Extract the corresponding points (keypoints) for both images
@@ -74,14 +74,15 @@ def OpenCV_SIFT_SURF(image_pair, pair_name: str):
         points_img2.append((x2, y2))
     
     # Create a results folder if it doesn't exist
-    folder_path = f"MyResults/SIFT/"
-    ensure_directory(folder_path)
+    save_image_path = f"MyResults/SIFT/"
+    ensure_directory(save_image_path)
     # Save the resulting image with correspondences
-    cv2.imwrite(f"{folder_path}{pair_name}.jpg", combined_image)
+    cv2.imwrite(f"{save_image_path}{pair_name}.jpg", combined_image)
     cprint(f"Saved SIFT Correspondences for pair {pair_name}", "green")
     
     # Return the corresponding points (keypoints)
-    return sorted(points_img1), sorted(points_img2)
+    # return sorted(points_img1), sorted(points_img2)
+    return points_img1, points_img2
 '''END OF THE SIFT SURF USING OPENCV (TAKEN FROM HW4):'''
 
 '''START OF THE RANSAC USING OPENCV:'''
@@ -108,7 +109,7 @@ def compute_homography(src_pts: np.ndarray, dest_pts: np.ndarray) -> np.ndarray:
     # print_matrix(A)  # DEBUG STATEMENT!!!    
     try:
         # Use pseudo-inverse to avoid singular matrix issues
-        H_temp = np.dot(np.linalg.inv(np.dot(A.T, A)), np.dot(A.T, b)) #np.dot(np.linalg.pinv(A), b)
+        H_temp =  np.dot(np.linalg.inv(np.dot(A.T, A)), np.dot(A.T, b)) # np.dot(np.linalg.pinv(A), b)  #
         H = np.append(H_temp, 1).reshape((3, 3))
     except np.linalg.LinAlgError:
         cprint("Error: Matrix inversion failed. The matrix A might be singular.", "red")
@@ -134,7 +135,7 @@ def residuals(H, pts1, pts2):
     res = (projected_pts[:, :2] - pts2)**2  # Squared error
     return res.flatten()  # Flatten for least_squares
 
-def RANSAC(img1_matches, img2_matches, p: int = 0.99, n: int = 4, sigma: int = 4, e: int = 0.6):
+def RANSAC(img1_matches, img2_matches, p: int = 0.99, n: int = 4, sigma: int = 4, e: int = 0.1):
     if img1_matches is None or img2_matches is None:
         cprint(f"Matching correspondences using SIFT are missing!!!", "red")
         exit(0)
@@ -169,14 +170,14 @@ def RANSAC(img1_matches, img2_matches, p: int = 0.99, n: int = 4, sigma: int = 4
         error = np.linalg.norm(img2_matches_hc[:, :2] - reprojected_pts[:, :2], axis=1)
             
         # Step 5: Identify inliers
-        inliers_indices = np.where(error <= delta)[0]
+        inliers_indices = np.where(error < delta)[0]
         
         # Step 6: Update best homography if this one has more inliers
         if len(inliers_indices) > num_inliers:
-            cprint(f"The current number of inliers: {len(best_inliers)}","white")
             cost.append(error)
             num_inliers = len(inliers_indices)
             best_inliers = inliers_indices
+            cprint(f"The current number of inliers: {len(best_inliers)}","white")
             best_H = H
         
     # Step 7: Find homography using Linear Least Squares, using set of all inliers:
@@ -189,8 +190,44 @@ def RANSAC(img1_matches, img2_matches, p: int = 0.99, n: int = 4, sigma: int = 4
     
     # Return the best homography and inliers found
     return best_H, best_inliers, cost
- 
+
 '''END OF THE RANSAC USING OPENCV:'''
+
+''' PLOT THE INLIERS AND THE OUTLIERS:'''
+# Visualize correspondences between images
+def visualize_correspondences(image_pair, correspondences, save_image_path):
+    img1_color, img2_color = image_pair[0].copy(), image_pair[1].copy()
+    
+    # Resize images to have the same height before concatenation:
+    height1, width1, _ = img1_color.shape
+    height2, width2, _ = img2_color.shape
+    if height1 != height2:
+        # Resize img2 to match the height of img1 
+        # (This is a little dumb but works, note to self, make this shrink the larger image to the smaller image size) 
+        # Here i just assume the second image needs to be resized
+        img2_color = cv2.resize(img2_color, (width2, height1))
+
+    img_combined = np.hstack((img1_color, img2_color))
+
+    for (pt1, pt2) in correspondences:
+        if pt1 is not None and pt2 is not None:
+            # Offset for the second image points
+            pt2_offset = (int(pt2[0] + img1_color.shape[1]), int(pt2[1]))
+            
+            # Convert points to integers
+            pt1_int = (int(pt1[0]), int(pt1[1]))
+            
+            # Draw red circles around points
+            circle_thickness = -2  # Filled circles
+            cv2.circle(img_combined, pt1_int, 4, (0, 0, 255), thickness=circle_thickness)  # For img1
+            cv2.circle(img_combined, pt2_offset, 4, (0, 0, 255), thickness=circle_thickness)  # For img2
+            
+            # Draw random color lines between each of the image points
+            line_thickness = 1
+            random_color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+            cv2.line(img_combined, pt1_int, pt2_offset, random_color, thickness=line_thickness)
+    
+    cv2.imwrite(f"{save_image_path}.jpg", img_combined)
 
 if __name__ == "__main__":
     cprint("Make sure you are running from HW5 directory!!!", "white")
@@ -205,6 +242,7 @@ if __name__ == "__main__":
         img1_sift_points, img2_sift_points =  OpenCV_SIFT_SURF((given_images[n-1], given_images[n]), f"Task1_SIFT_pairs_{n}_{n+1}")
         # [print(f"The Set is Equal") if (img1_sift_points) == (img2_sift_points) else print(f"The set is not equal!!!")]
         cprint(f"Number of SIFT points for the input image {n}.jpg and {n+1}.jpg: {len(img1_sift_points)}", "cyan")
+        # visualize_correspondences((given_images[n-1],given_images[n]), [(img1_sift_points[i], img2_sift_points[i]) for i in best_inliers], f"MyResults/InOutLiers/Task1_InOutLiers_{n}_{n+1}.jpg")
        
         # Implement the RANSAC Algo using the SIFT Correspondences:
         best_H, best_inliers, cost =  RANSAC(img1_sift_points, img2_sift_points)
@@ -212,13 +250,12 @@ if __name__ == "__main__":
         np.savetxt(f'MyResults/inliers_pairs_{n}_{n+1}.txt', best_inliers)
         cprint(f"Number of best inliers: {len(best_inliers)}", "light_magenta")
         # cprint(f"Best homography: {best_H}","white")
-        # print()
-        # print()
         # cprint(f"Best Inliers: {best_inliers}","white")
-        # print()
-        # print()
         # cprint(f"Cost: {cost}","white")
-        
+
+        # plot_inliers_and_outliers(given_images[n-1],given_images[n],img1_sift_points, best_inliers,(img1_sift_points,img2_sift_points),f"MyResults/InOutLiers/Task1_InOutLiers_{n}_{n+1}.jpg")
+        visualize_correspondences((given_images[n-1],given_images[n]), [(img1_sift_points[i], img2_sift_points[i]) for i in best_inliers], f"MyResults/InOutLiers/Task1_InOutLiers_{n}_{n+1}.jpg")
+
         avg_inliers += len(best_inliers)
         print()
         print()
