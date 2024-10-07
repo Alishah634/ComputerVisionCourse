@@ -1,6 +1,13 @@
 PrevTest*/
-MyResults/best*
-MyResults/SIFT/
+MyResults/
 *.zip
-HW5/hw5_SyedAliShah.pdf
+*.pdf
 Final_Images/
+HW5_images/
+
+# Ignore directories named 'MyImages', 'MyResults', 'ExtraCredit', 'Final_sub'
+MyImages/
+MyResults/
+ExtraCredit/
+Final_sub/
+MyVersion/
