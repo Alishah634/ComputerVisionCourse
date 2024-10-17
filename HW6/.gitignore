@@ -4,9 +4,11 @@
 
 # # Ignore directories named 'MyImages', 'MyResults', 'ExtraCredit', 'Final_sub'
 # HW6_images/
-# MyImages/
-# MyResults/
+MyImages/
+MyImageResults/
+MyResults/
 # MyVersion/
 # Final_Images/
 # Final_sub/
 # ExtraCredit/
+
