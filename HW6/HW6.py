@@ -140,7 +140,7 @@ def otsu_rgb(img, file_name: str = None, iterations=2):
 
 
 '''TASK 1.2: TEXTURE SEGMENTATION: '''
-def get_texture(img, win_sizes=[3, 5, 7], num_iterations=[1, 1, 1]):
+def get_texture(img, win_sizes=[3, 5, 7], num_iterations=1):
     # Convert image to grayscale
     gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
@@ -167,7 +167,7 @@ def get_texture(img, win_sizes=[3, 5, 7], num_iterations=[1, 1, 1]):
         variance_img = cv2.normalize(variance_img, None, 0, 255, cv2.NORM_MINMAX)
 
         # Apply Otsu’s algorithm to the texture feature map (variance image)
-        binary_mask = otsu_threshold_grayscale(variance_img,channel_name=win_sizes[idx], channel_bit=num_iterations[idx])
+        binary_mask = otsu_threshold_grayscale(variance_img,channel_name=win_sizes[idx], channel_bit=num_iterations)
         combined_masks[:, :, idx] = binary_mask
         texture_layers[:, :, idx] = variance_img
 
@@ -238,8 +238,6 @@ def task1():
     # Apply texture-based segmentation
     dog_texture_mask, dog_texture_layers = get_texture(dog_image)
     flower_texture_mask, flower_texture_layers = get_texture(flower_image)
-    # debug_plot_image(dog_texture_mask, title="Dog TEXTURE COMBINED Image") # DEBUG STATEMENT!!!
-    # debug_plot_image(flower_texture_mask, title="Flower TEXTURE COMBINED Image") # DEBUG STATEMENT!!!
 
     # Save texture masks:
     ensure_directory(f"MyResults/Texture_SEG")
@@ -261,10 +259,6 @@ def task1():
     flower_rgb_contour_img = detect_contours(flower_combined_mask, 1, "flower")
     dog_texture_contour_img = detect_contours(dog_texture_mask, 5)
     flower_texture_contour_img = detect_contours(flower_texture_mask, 1, "flower")
-    # debug_plot_image(dog_rgb_contour_img, title="Dog RGB Contour Image") # DEBUG STATEMENT!!!
-    # debug_plot_image(flower_rgb_contour_img, title="Flower RGB Contour Image") # DEBUG STATEMENT!!!
-    # debug_plot_image(dog_texture_contour_img, title="Dog RGB Contour Image") # DEBUG STATEMENT!!!
-    # debug_plot_image(flower_texture_contour_img, title="Flower RGB Contour Image") # DEBUG STATEMENT!!!
 
     # Save the results
     ensure_directory("MyResults/Contours")
@@ -298,8 +292,6 @@ def task1():
     temp = dilate_image(dog_combined_mask, erode_dilate_size, 1)
     temp = erode_image(temp, erode_dilate_size, 1)
     dilate_erode_mask = detect_contours(temp, 1)
-    # debug_plot_image(erode_dilate_mask, "DOG RGB ERODE DILATE CONTOUR IMAGE") # DEBUG STATEMENT!!!
-    # debug_plot_image(dilate_erode_mask, "DOG RGB DILATE ERODE  CONTOUR IMAGE") # DEBUG STATEMENT!!!
     cv2.imwrite("MyResults/ErodeDilate/dog_rgb_closing_mask.jpg", cv2.cvtColor(dilate_erode_mask, cv2.COLOR_GRAY2BGR))
     
     '''FLOWER: '''
@@ -327,8 +319,6 @@ def task1():
     temp = dilate_image(flower_combined_mask, erode_dilate_size, 1)
     temp = erode_image(temp, erode_dilate_size, 1)
     dilate_erode_mask = detect_contours(temp, 1)
-    # debug_plot_image(erode_dilate_mask, "FLOWER RGB DILATE ERODE CONTOUR IMAGE") # DEBUG STATEMENT!!!
-    # debug_plot_image(dilate_erode_mask, "FLOWER RGB ERODE DILATE CONTOUR IMAGE") # DEBUG STATEMENT!!!
     cv2.imwrite("MyResults/ErodeDilate/flower_rgb_closing_mask.jpg", cv2.cvtColor(dilate_erode_mask, cv2.COLOR_GRAY2BGR))
 
     '''TEXTURE CONTOURS: '''
@@ -363,8 +353,6 @@ def task2():
     # Apply texture-based segmentation
     first_texture_mask, first_texture_layers = get_texture(first_image)
     second_texture_mask, second_texture_layers = get_texture(second_image)
-    # debug_plot_image(first_texture_mask, title="first TEXTURE COMBINED Image") # DEBUG STATEMENT!!!
-    # debug_plot_image(second_texture_mask, title="second TEXTURE COMBINED Image") # DEBUG STATEMENT!!!
 
     # Save texture masks:
     ensure_directory(f"MyImageResults/Texture_SEG")
@@ -386,10 +374,6 @@ def task2():
     second_rgb_contour_img = detect_contours(second_combined_mask, 1, "second")
     first_texture_contour_img = detect_contours(first_texture_mask, 5)
     second_texture_contour_img = detect_contours(second_texture_mask, 1, "second")
-    # debug_plot_image(first_rgb_contour_img, title="first RGB Contour Image") # DEBUG STATEMENT!!!
-    # debug_plot_image(second_rgb_contour_img, title="second RGB Contour Image") # DEBUG STATEMENT!!!
-    # debug_plot_image(first_texture_contour_img, title="first RGB Contour Image") # DEBUG STATEMENT!!!
-    # debug_plot_image(second_texture_contour_img, title="second RGB Contour Image") # DEBUG STATEMENT!!!
 
     # Save the results
     ensure_directory("MyImageResults/Contours")
@@ -423,8 +407,6 @@ def task2():
     temp = dilate_image(first_combined_mask, erode_dilate_size, 1)
     temp = erode_image(temp, erode_dilate_size, 1)
     dilate_erode_mask = detect_contours(temp, 1)
-    # debug_plot_image(erode_dilate_mask, "first RGB ERODE DILATE CONTOUR IMAGE") # DEBUG STATEMENT!!!
-    # debug_plot_image(dilate_erode_mask, "first RGB DILATE ERODE  CONTOUR IMAGE") # DEBUG STATEMENT!!!
     cv2.imwrite("MyImageResults/ErodeDilate/first_rgb_closing_mask.jpg", cv2.cvtColor(dilate_erode_mask, cv2.COLOR_GRAY2BGR))
     
     '''second: '''
@@ -452,8 +434,6 @@ def task2():
     temp = dilate_image(second_combined_mask, erode_dilate_size, 1)
     temp = erode_image(temp, erode_dilate_size, 1)
     dilate_erode_mask = detect_contours(temp, 1)
-    # debug_plot_image(erode_dilate_mask, "second RGB DILATE ERODE CONTOUR IMAGE") # DEBUG STATEMENT!!!
-    # debug_plot_image(dilate_erode_mask, "second RGB ERODE DILATE CONTOUR IMAGE") # DEBUG STATEMENT!!!
     cv2.imwrite("MyImageResults/ErodeDilate/second_rgb_closing_mask.jpg", cv2.cvtColor(dilate_erode_mask, cv2.COLOR_GRAY2BGR))
 
     '''TEXTURE CONTOURS: '''
