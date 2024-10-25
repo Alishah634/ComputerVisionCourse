@@ -285,8 +285,6 @@ def extract_hue(hsi_iamge: np.ndarray) -> np.ndarray:
     demonstrate its performance on a test set.
 '''
 def task1():
-    # cprint(f"_________________________ HEADING: _________________________","white")
-    # cprint(f"_________________________ HEADING: _________________________","white")
     '''
     # Read in the files if needed, use pickles as needed for saving intermediate values, to prevent recomputations between runs:
     '''
@@ -308,6 +306,8 @@ def task1():
     hsi_train_images_with_classes, hsi_test_images_with_classes, hue_train, hue_test = list(), list(), list(), list() 
     
     start = time.time() # DEBUG STATEMENT!!!
+
+    cprint(f"_________________________ RGB -> HSI for TRAINING: _________________________","white")
     # Training Dataset: RGB to HSI, extracing hue and saving to a file!!!:
     if (not os.path.exists("Pickle_Files/HSI_Images/training/hue_train_with_classes.pkl")):
         for i in tqdm(range(len(rgb_train_images_with_classes))):
@@ -322,6 +322,7 @@ def task1():
     mid = time.time() # DEBUG STATEMENT!!!
     cprint(f"TIME TAKEN for GENERATING RGB to HSI for TRAINING: {time.time()-start}","light_yellow")
     
+    cprint(f"_________________________ RGB -> HSI for TESTING: _________________________","white")
     # Testing Dataset: RGB to HSI, extracing hue and saving to a file!!!:
     if (not os.path.exists("Pickle_Files/HSI_Images/training/hue_test_with_classes.pkl")):
         for i in tqdm(range(len(rgb_test_images_with_classes))):
@@ -334,10 +335,13 @@ def task1():
         hue_test = load_from_pickle("Pickle_Files/HSI_Images/testing/", f"hue_test_with_classes")
         
     cprint(f"TIME TAKEN for GENERATING RGB to HSI TESTING: {time.time()-mid}","light_yellow") # DEBUG STATEMENT!!!
+    print()
+    print()
     cprint(f"TIME TAKEN for GENERATING RGB to HSI TOTAL: {time.time()-start}","light_yellow") # DEBUG STATEMENT!!!
     cprint(f"{len(hue_train)}", "cyan")
     cprint(f"{len(hue_test)}", "cyan")
     cprint(f"YEAH THIS WORKED!!!","light_magenta")
+   
     
     # NOTE FROM OFFICE HOURS: !!!
     # Save the intermediate results in pickle 
@@ -368,12 +372,8 @@ def task1():
     # Set up functions for LBP
         You have to use the Hue channel of the HSI images for this task. For visualization, you should plot the LBP histogram feature vector of at least one image,
         from each class.
-        
-        
-        
-        
     '''
-    
+     
     
     '''
     # Set up Gram Matrix based texture descriptors.
