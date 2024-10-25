@@ -1,0 +1,16 @@
+# PrevTest*/
+*.zip
+*.pdf
+
+# # Ignore directories named 'MyImages', 'MyResults', 'ExtraCredit', 'Final_sub'
+# HW6_images/
+MyImages/
+MyImageResults/
+MyResults/
+HW7-Auxilliary
+Pickle_Files
+# MyVersion/
+# Final_Images/
+# Final_sub/
+# ExtraCredit/
+
