@@ -7,7 +7,8 @@ from typing import List, Tuple # Format typing
 from argparse import ArgumentParser # Parsing arguments
 from termcolor import cprint # Formatting prints
 import pickle # For saving intermediate values to avoid recomputing
-
+import math # 
+import BitVector
 # Other Computer vision, Data science, Math, plotting imports:
 import cv2
 import random
@@ -196,11 +197,141 @@ def convert_rgb_to_hsi(image: np.ndarray) -> np.ndarray:
     # Returns: np.ndarray: HSI image with H in degrees [0, 360), S in [0, 1], and I in [0, 1].
     return HSI 
 
-def extract_hue(hsi_iamge: np.ndarray) -> np.ndarray:
-    return hsi_iamge[:, :, 0]
-
+def extract_hue(hsi_image: np.ndarray) -> np.ndarray:
+    if hsi_image.ndim != 3 or hsi_image.shape[-1] != 3:
+        raise ValueError(f"Invalid HSI image shape. Expected 3D HSI image with 3 channels, got shape {hsi_image.shape}")
+    # Extract and return the Hue channel
+    return hsi_image[:, :, 0]
 '''END of function for Converting to HSI:'''
 
+'''START of LBP Function:'''
+def compute_lbp(hue_param: np.ndarray, P = 8, R = 1) -> np.ndarray:
+    # cprint(f"SIZE OF hue_param: {hue_param.shape}")
+    # image = cv2.cvtColor(hue_param, cv2.COLOR_BGR2GRAY)
+    IMAGE_SIZE = 64
+    image = hue_param[:,:,0]
+    image = cv2.resize(image, (IMAGE_SIZE, IMAGE_SIZE))
+    cprint(f"SIZE OF image: {(len(image), len(image[0]))}")
+    # image = cv2.resize(hue_param, (64, 64), interpolation=cv2.INTER_AREA)
+    rowmax = IMAGE_SIZE - R
+    colmax = IMAGE_SIZE - R
+    lbp_hist = {t:0 for t in range(P+2)} #(C6)
+    for i in range(R,rowmax): #(C7)
+        for j in range(R,colmax): #(C8)
+            pattern = [] #(C10)
+        for p in range(P): #(C11)
+            # We use the index k to point straight down and l to point to the
+            # right in a circular neighborhood around the point (i,j). And we
+            # use (del_k, del_l) as the offset from (i,j) to the point on the
+            # R-radius circle as p varies.
+            del_k,del_l = R*math.cos(2*math.pi*p/P), R*math.sin(2*math.pi*p/P) #(C12)
+            if abs(del_k) < 0.001: del_k = 0.0 #(C13)
+            if abs(del_l) < 0.001: del_l = 0.0 #(C14)
+            k, l = i + del_k, j + del_l #(C15)
+            k_base,l_base = int(k),int(l) #(C16)
+            delta_k,delta_l = k-k_base,l-l_base #(C17)
+            if (delta_k < 0.001) and (delta_l < 0.001): #(C18)
+                image_val_at_p = float(image[k_base][l_base]) #(C19)
+            elif (delta_l < 0.001): #(C20)
+                image_val_at_p = (1 - delta_k) * image[k_base][l_base] + \
+                delta_k * image[k_base+1][l_base] #(C21)
+            elif (delta_k < 0.001): #(C22)
+                image_val_at_p = (1 - delta_l) * image[k_base][l_base] + \
+                delta_l * image[k_base][l_base+1] #(C23)
+            else: #(C24)
+                image_val_at_p = (1-delta_k)*(1-delta_l)*image[k_base][l_base] + \
+                (1-delta_k)*delta_l*image[k_base][l_base+1] + \
+                delta_k*delta_l*image[k_base+1][l_base+1] + \
+                delta_k*(1-delta_l)*image[k_base+1][l_base] #(C25)
+            if image_val_at_p >= image[i][j]: #(C26)
+                pattern.append(1) #(C27)
+            else: #(C28)
+                pattern.append(0) #(C29)
+        # print("pattern: %s" % pattern) #(C30)
+        bv = BitVector.BitVector( bitlist = pattern ) #(C31)
+        intvals_for_circular_shifts = [int(bv << 1) for _ in range(P)] #(C32)
+        minbv = BitVector.BitVector( intVal = min(intvals_for_circular_shifts), size = P ) #(C33)
+        # print("minbv: %s" % minbv) #(C34)
+        bvruns = minbv.runs() #(C35)
+        encoding = None
+        if len(bvruns) > 2: #(C36)
+            lbp_hist[P+1] += 1 #(C37)
+            encoding = P+1 #(C38)
+        elif len(bvruns) == 1 and bvruns[0][0] == '1': #(C39)
+            lbp_hist[P] += 1 #(C40)
+            encoding = P #(C41)
+        elif len(bvruns) == 1 and bvruns[0][0] == '0': #(C42)
+            lbp_hist[0] += 1 #(C43)
+            encoding = 0 #(C44)
+        else: #(C45)
+            lbp_hist[len(bvruns[1])] += 1 #(C46)
+            encoding = len(bvruns[1]) #(C47)
+        # print("encoding: %s" % encoding) #(C48)
+    # print("\nLBP Histogram: %s" % lbp_hist)
+    return list(lbp_hist.values())
+
+
+def lbp_plotter(data, hue_data, class_labels, image_dir, dataset_dir,  num_classes=4):
+    """
+    Args/Params:
+        data (List[List[int]]): List of LBP histograms for images.
+        hue_data (List[Tuple[np.ndarray, str, str]]): List of tuples with HSI images, class names, and image filenames.
+        class_labels (List[str]): List of class label names (e.g., ["cloudy", "rain", "shine", "sunrise"]).
+        image_dir (str): Directory path where image files are stored.
+        num_classes (int): Number of classes to visualize (default is 4).
+    """
+    # Initialize figure with appropriate size
+    fig, ax = plt.subplots(2, num_classes, figsize=(6 * num_classes, 12))
+
+    for class_idx, class_name in enumerate(class_labels):
+        # Find the first image index for the current class
+        class_indices = [i for i, (_, lbl, _) in enumerate(hue_data) if lbl.lower() == class_name.lower()]
+        if not class_indices:
+            cprint(f"No images found for class '{class_name}'", "yellow")
+            # Optionally, hide the subplot if no image is found
+            ax[0, class_idx].axis('off')
+            ax[1, class_idx].axis('off')
+            continue
+        img_index = class_indices[0]
+
+        # Plot LBP Histogram
+        bins = np.arange(len(data[img_index]))
+        ax[0, class_idx].bar(bins, data[img_index], width=1, edgecolor='k')
+        ax[0, class_idx].set_title(f"LBP Histogram: {class_name}")
+        ax[0, class_idx].set_xlabel("LBP Code")
+        ax[0, class_idx].set_ylabel("Frequency")
+
+        # Read and plot the image
+        image_filename = hue_data[img_index][2]
+        image_path = os.path.join(image_dir, image_filename)
+
+        # Check if the image path exists
+        if not os.path.isfile(image_path):
+            cprint(f"Warning: Image file '{image_path}' does not exist.", "red")
+            ax[1, class_idx].set_title(f"Missing: {image_filename}")
+            ax[1, class_idx].axis('off')
+            continue
+
+        img = cv2.imread(image_path)
+        if img is not None:
+            # Convert BGR (OpenCV default) to RGB for correct color display in Matplotlib
+            img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            ax[1, class_idx].imshow(img_rgb)
+            ax[1, class_idx].set_title(image_filename)
+        else:
+            cprint(f"Warning: Unable to read image '{image_path}'.", "red")
+            ax[1, class_idx].set_title(f"Unreadable: {image_filename}")
+
+        # Hide axis for image plots
+        ax[1, class_idx].axis('off')
+
+    plt.tight_layout()
+    # plt.show()
+    ensure_directory("MyResults/LPB_Hist")
+    plt.savefig(f"MyResults/LPB_Hist/lbp_{dataset_dir}_histogram.jpg")
+
+    
+'''END of LBP Function:'''
 
 '''
 # To summarize, the programming tasks in this homework include:
@@ -215,8 +346,8 @@ def task1():
     """
     Task 1: Convert RGB images to HSI, extract Hue channel, and save the data.
     """
+    """ ========================================================LBP DESCRIPTORS: ========================================================"""
     start_total = time.time()
-
     # Paths for RGB pickles
     rgb_training_pickle = "Pickle_Files/Original_Images/training/rgb_train_images_with_classes.pkl"
     rgb_testing_pickle = "Pickle_Files/Original_Images/testing/rgb_test_images_with_classes.pkl"
@@ -252,7 +383,7 @@ def task1():
         hue_train = process_images(rgb_train, "Converting Training Images to Hue", ("Pickle_Files/HSI_Images/training/", "hue_train_with_classes"))
     else:
         cprint("Loading Hue training images from pickle", "white")
-        hue_train = load_from_pickle("Pickle_Files/HSI_Images/training/", "hue_train_with_classes")
+        hue_train = load_from_pickle("Pickle_Files/HSI_Images/training/", "hsi_train_WORKING_images_with_classes")
     
     # Convert and save Hue channel for testing
     # testing_hue_pickle = "Pickle_Files/HSI_Images/testing/hue_test_with_classes.pkl"
@@ -262,21 +393,90 @@ def task1():
         hue_test = process_images(rgb_test, "Converting Testing Images to Hue", ("Pickle_Files/HSI_Images/testing/", "hue_test_with_classes"))
     else:
         cprint("Loading Hue testing images from pickle", "white")
-        hue_test = load_from_pickle("Pickle_Files/HSI_Images/testing/", "hue_test_with_classes")
+        hue_test = load_from_pickle("Pickle_Files/HSI_Images/testing/", "hsi_test_WORKING_images_with_classes")
+    
     cprint(f"TIME TAKEN for GENERATING RGB to HSI TOTAL: {time.time()-start_total:.2f} seconds", "light_yellow")
+   
     # Debugging: Print lengths
     cprint(f"Number of Hue training images: {len(hue_train)}", "cyan")
     cprint(f"Number of Hue testing images: {len(hue_test)}", "cyan")
     cprint("YEAH THIS WORKED!!!", "light_magenta")
+    cprint(f"HUE TEST: {len(hue_test)}","cyan")
     
     '''
         you have to use the hue channel of the hsi images for this task. for visualization, you should plot the lbp histogram feature vector of at least one image,
-        FROM EACH CLASS.
+        from each class.
     '''
+    ensure_directory("Pickle_Files/LBP")
+
+    MAJOR_PATH = "HW7-Auxilliary/HW7-Auxilliary/data/"
+    ################################### TRAINING ############################################################
+    # Define the path to the training images
+    training_hue_pickle = "Pickle_Files/LBP/lbp_train_descriptors.pkl"
+    training_image_dir = os.path.join(MAJOR_PATH, "training")
+    if not os.path.exists(training_hue_pickle):
+        cprint("\nCalcualting the TRAIN LBP Descriptors...", "white")
+        lbp_descriptors = [compute_lbp(hue_image) for hue_image, _, _ in hue_train]
+        # Plot LBP histograms and corresponding images
+        lbp_plotter(
+            data=lbp_descriptors,
+            hue_data=hue_train,
+            class_labels=["cloudy", "rain", "shine", "sunrise"],
+            image_dir=training_image_dir,
+            dataset_dir = "training",
+            num_classes=4
+        )
+        save_to_pickle(lbp_descriptors, "Pickle_Files/LBP/", "lbp_train_descriptors")
+        cprint(f"FINISHED LBP TRAINING DESCRIPTORS","green")  
+    else:
+        cprint("Loading Hue training descriptors from pickle", "white")
+        lbp_descriptors= load_from_pickle("Pickle_Files/LBP/", "lbp_train_descriptors")
+        lbp_plotter(
+            data=lbp_descriptors,
+            hue_data=hue_train,
+            class_labels=["cloudy", "rain", "shine", "sunrise"],
+            image_dir=training_image_dir,
+            dataset_dir = "verify_train",
+            num_classes=4
+        )
+    ################################### TESTING############################################################
+    # Define the path to the testing images
+    testing_hue_pickle = "Pickle_Files/LBP/lbp_test_descriptors.pkl"
+    testing_image_dir = os.path.join(MAJOR_PATH, "testing")
+    if not os.path.exists(testing_hue_pickle):
+        cprint("\nCalcualting the Test LBP Descriptors...", "white")
+        save_to_pickle(lbp_descriptors, "Pickle_Files/LBP/","lbp_test_descriptors")
+        lbp_descriptors = [compute_lbp(hue_image) for hue_image, _, _ in hue_test]
+        save_to_pickle(lbp_descriptors, "Pickle_Files/LBP/","lbp_test_descriptors")
+        # Plot LBP histograms and corresponding images
+        lbp_plotter(
+            data=lbp_descriptors,
+            hue_data=hue_test,
+            class_labels=["cloudy", "rain", "shine", "sunrise"],
+            image_dir=testing_image_dir,
+            dataset_dir = "testing",
+            num_classes=4
+        )
+        cprint(f"FINISHED LBP TESTING DESCRIPTORS","green") 
+    else:
+        cprint("Loading Hue testing descriptors from pickle", "white")
+        lbp_descriptors = load_from_pickle("Pickle_Files/LBP", "lbp_test_descriptors")
+        lbp_plotter(
+            data=lbp_descriptors,
+            hue_data=hue_test,
+            class_labels=["cloudy", "rain", "shine", "sunrise"],
+            image_dir=testing_image_dir,
+            dataset_dir = "verify_test",
+            num_classes=4
+        )
     
+    """ ========================================================VGG DESCRIPTORS: ========================================================"""
+    
+
+
     '''
-    # SET UP GRAM MATRIX BASED TEXTURE DESCRIPTORS.
-        USING THE OUTPUT FEATURE MAPS OF THE THREE CONFIGURATIONS (VGG19, RESNET-50 COARSE, AND RESNET-50 FINE) YOU NEED TO IMPLEMENT YOUR OWN GRAM MATRIX
+    # set up gram matrix based texture descriptors.
+        using the output feature maps of the three configurations (vgg19, resnet-50 coarse, and resnet-50 fine) you need to implement your own gram matrix
         based descriptor extraction routines. For visualization, you should plot the 2D Gram Matrix for at least one image from each class for the three configurations.
         Comment on your Gram matrix visualizations. Are all feature channels strongly correlated?
     '''
