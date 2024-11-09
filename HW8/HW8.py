@@ -1,17 +1,17 @@
 import os
 import sys
 import time
-import logging # For logging and decorators
-import functools # For logging and decorators
-from tqdm import tqdm # Progress bar
-from typing import List, Tuple # Format typing
-from argparse import ArgumentParser # Parsing arguments
-from termcolor import cprint # Formatting prints
-import pickle # For saving intermediate values to avoid recomputing
-import math # 
+import logging
+import functools
+from tqdm import tqdm
+from typing import List, Tuple
+from argparse import ArgumentParser
+from termcolor import cprint
+import pickle
+import math
 import BitVector
 
-# Other Computer vision, Data science, Math, plotting imports:
+# Computer vision, Data science, and plotting imports:
 import cv2
 import random
 import numpy as np
@@ -24,13 +24,14 @@ from scipy.optimize import least_squares
 from sklearn import svm
 from sklearn.metrics import confusion_matrix, accuracy_score, ConfusionMatrixDisplay
 from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
 
 # Folder Paths:
-DATASET1_PATH = "HW8-Files/HW8-Files/Dataset1/" # Images are in the format Pic_#.jpg
-DATASET2_PATH = "HW8-Files/HW8-Files/Dataset2/" # Images are in the format Pic_#.jpg
+DATASET1_PATH = "HW8-Files/HW8-Files/Dataset1/"
+DATASET2_PATH = "HW8-Files/HW8-Files/Dataset2/"
 
-'''Util functions '''
-# Create a folder if it does not exist
+'''START of Utility functions '''
+# Utility functions
 def ensure_directory(path):
     if not os.path.exists(path):
         os.makedirs(path)
@@ -40,165 +41,51 @@ def display_image(img, title="Image"):
     plt.imshow(img, cmap='gray')
     plt.title(title)
     plt.axis('off')
-    # plt.savefig(f"MyResults/test.png")
     plt.show()
-    # time.sleep()
-'''Util functions^^^ '''
-
-"""========================================================= START of TASK 3.1 ========================================================="""
-# Load all images from Dataset1
-image_paths = [ DATASET1_PATH+name for name in (os.listdir(DATASET1_PATH)) ]
-images = [cv2.imread(image_path) for image_path in image_paths]
-
-# Detect and visualize corners and lines using polar coordinates
-# def detect_corners(image, save_img=False, output_name="output", canny_thresh1=225, canny_thresh2=225, houghs_thresh=43, rho_lines_thresh=10, theta_thresh = np.pi / 90, corner_thresh=10):
-def detect_corners(image, save_img=False, output_name="output",corner_params=[225, 225, 43,  10,  np.pi / 90,  10]):
-    canny_thresh1, canny_thresh2, houghs_thresh, rho_lines_thresh, theta_thresh, corner_thresh= corner_params
+''' END of Utility functions '''
     
-    # Convert to grayscale and apply Gaussian blur
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-
-    # Apply Canny edge detection
-    edges = cv2.Canny(blurred, canny_thresh1, canny_thresh2)
-    dilated_edges = cv2.dilate(edges, np.ones((3,3), np.uint8), iterations=1)
-    if save_img:
-        ensure_directory("MyResults")  # Ensure 'MyResults' directory exists
-        cv2.imwrite(f'MyResults/{output_name}_edges.jpg', edges)
-        cv2.imwrite(f'MyResults/{output_name}_dilated_edges.jpg', dilated_edges)
-
-    # Apply Hough Line Transform to detect lines in polar coordinates
-    lines = cv2.HoughLines(edges, 1, np.pi / 180, houghs_thresh, None, 0, 0)
-
-    # Create a copy of the original image to draw the lines on
-    line_img = image.copy()
-
-    vertical_lines, horizontal_lines = [], []
-    if lines is not None:
-        for line in lines:
-            rho, theta = line[0]
-
-            # Classify lines as vertical or horizontal based on theta
-            if np.abs(theta) < np.pi / 4 or np.abs(theta) > 3 * np.pi / 4:
-                vertical_lines.append((rho, theta))
-            else:
-                horizontal_lines.append((rho, theta))
-    hthresh = sum([horizontal_lines[i][0] for i in range(len(horizontal_lines))])/len(horizontal_lines)
-    vthresh = sum([vertical_lines[i][0] for i in range(len(vertical_lines))])/len(vertical_lines)
-    hthresh = abs(hthresh)
-    vthresh = abs(vthresh)
-    # print(f"Threshold of Horizontal lines: {hthresh}")
-    # print(f"Threshold of Vertical lines: {vthresh}")
     
-    # Helper function to group lines based on their rho value
-    # def group_lines(lines, rho_threshold=10, theta_threshold=np.pi / 90):
-    def group_lines(lines, rho_threshold=10, theta_threshold=np.pi / 90):
-        if not lines:
-            return []
+'''========================================================= TASK 3.1 ========================================================='''
+# Group lines by proximity based on rho values
+def group_lines(lines, distance_threshold=0.5):
+    if not lines:
+        return []
+    lines = sorted(lines, key=lambda line: line[0])  # Sort by rho
+    grouped_lines = []
+    current_group = [lines[0]]
 
-        # Sort lines by rho for easier clustering
-        lines = sorted(lines, key=lambda line: (line[0], line[1]))
-        grouped_lines = []
-        current_group = [lines[0]]
+    for i in range(1, len(lines)):
+        dist = np.linalg.norm(np.array(lines[i]) - np.array(current_group[-1]))
+        if dist < distance_threshold:
+            current_group.append(lines[i])
+        else:
+            mean_rho = np.mean([line[0] for line in current_group])
+            mean_theta = np.mean([line[1] for line in current_group])
+            grouped_lines.append([mean_rho, mean_theta])
+            current_group = [lines[i]]
 
-        for i in range(1, len(lines)):
-            rho, theta = lines[i]
-            prev_rho, prev_theta = current_group[-1]
+    if current_group:
+        mean_rho = np.mean([line[0] for line in current_group])
+        mean_theta = np.mean([line[1] for line in current_group])
+        grouped_lines.append([mean_rho, mean_theta])
 
-            # Check if both rho and theta differences are within thresholds
-            if abs(rho - prev_rho) < rho_threshold and abs(theta - prev_theta) < theta_threshold:
-                current_group.append((rho, theta))
-            else:
-                # Average the current group and add it as a single line
-                avg_rho = np.mean([line[0] for line in current_group])
-                avg_theta = np.mean([line[1] for line in current_group])
-                grouped_lines.append((avg_rho, avg_theta))
-                
-                # Start a new group with the current line
-                current_group = [(rho, theta)]
+    return grouped_lines
 
-        # Handle the last group
-        if current_group:
-            avg_rho = np.mean([line[0] for line in current_group])
-            avg_theta = np.mean([line[1] for line in current_group])
-            grouped_lines.append((avg_rho, avg_theta))
+# Helper function to calculate intersections (corners)
+def find_intersection_polar_coords(line1, line2):
+    rho1, theta1 = line1
+    rho2, theta2 = line2
+    if theta1 == theta2:
+        return None  # Parallel lines (no intersection)
+    A = np.array([
+        [np.cos(theta1), np.sin(theta1)],
+        [np.cos(theta2), np.sin(theta2)]
+    ])
+    b = np.array([rho1, rho2])
+    x, y = np.linalg.solve(A, b)
+    return int(x), int(y)
 
-        return grouped_lines
-
-
-    grouped_horizontal = group_lines(horizontal_lines)
-    grouped_vertical = group_lines(vertical_lines)
-
-    for avg_rho, avg_theta in grouped_horizontal:
-        draw_polar_line(line_img, avg_rho, avg_theta, color=(255, 0, 0))  # Horizontal in blue
-
-    for avg_rho, avg_theta in grouped_vertical:
-        draw_polar_line(line_img, avg_rho, avg_theta, color=(0, 0, 255))  # Vertical in red
-
-    if save_img:
-        cv2.imwrite(f'MyResults/{output_name}_lines.jpg', line_img)
-
-    # Calculate intersection points as corners based on the grouped lines
-    corner_img = image.copy()
-    corners = []
-    for hline in grouped_horizontal:
-        for vline in grouped_vertical:
-            intersect = find_intersection_polar(hline, vline)
-            if intersect is not None:
-                x, y = int(intersect[0]), int(intersect[1])
-                if 0 <= x < corner_img.shape[1] and 0 <= y < corner_img.shape[0]:
-                    corners.append((x, y))
-
-
-    def group_corners(corners, distance_threshold=0.5):
-        if not corners:
-            return []
-
-        # Sort corners by x-coordinate for easier clustering
-        corners = sorted(corners, key=lambda pt: (pt[0], pt[1]))
-        grouped_corners = []
-        current_group = [corners[0]]
-
-        for i in range(1, len(corners)):
-            # Calculate the Euclidean distance between the current point and the last point in the current group
-            dist = np.linalg.norm(np.array(corners[i]) - np.array(current_group[-1]))
-            
-            # If within threshold, add to the current group
-            if dist < distance_threshold:
-                current_group.append(corners[i])
-            else:
-                # Average the current group and add it as a single point
-                mean_x = int(np.mean([pt[0] for pt in current_group]))
-                mean_y = int(np.mean([pt[1] for pt in current_group]))
-                grouped_corners.append((mean_x, mean_y))
-                
-                # Start a new group with the current point
-                current_group = [corners[i]]
-        
-        # Average and append the last group if there is one
-        if current_group:
-            mean_x = int(np.mean([pt[0] for pt in current_group]))
-            mean_y = int(np.mean([pt[1] for pt in current_group]))
-            grouped_corners.append((mean_x, mean_y))
-
-        return grouped_corners
-
-    grouped_corners = group_corners(corners) 
-    grouped_corners = group_corners(grouped_corners, distance_threshold=corner_thresh) 
-    for corner in grouped_corners:
-        x, y = int(corner[0]), int(corner[1])
-        if 0 <= x < corner_img.shape[1] and 0 <= y < corner_img.shape[0]:
-            # corners.append((x, y))
-            cv2.circle(corner_img, (x, y), 5, (0, 255, 255), -1)
-
-    if save_img:
-        # cv2.imwrite(f'MyResults/{output_name}_corners.jpg', corner_img)
-        cv2.imwrite(f'MyResults/{output_name}_corners.jpg', corner_img)
-        time.sleep(1)
-    # return corners
-    return grouped_corners
-
-# Helper function to draw a line given rho and theta in polar coordinates
+# Function to draw a line given rho and theta in polar coordinates
 def draw_polar_line(img, rho, theta, color=(0, 255, 0), thickness=2):
     a = np.cos(theta)
     b = np.sin(theta)
@@ -210,82 +97,194 @@ def draw_polar_line(img, rho, theta, color=(0, 255, 0), thickness=2):
     y2 = int(y0 - 2500 * (a))
     cv2.line(img, (x1, y1), (x2, y2), color, thickness)
 
-# Helper function to find intersection of two lines in polar coordinates
-def find_intersection_polar(line1, line2):
-    rho1, theta1 = line1
-    rho2, theta2 = line2
-    # Lines are parallel if their angles are the same
-    if theta1 == theta2:
+# Function to convert a line to homogeneous coordinates
+def to_homogeneous(rho, theta):
+    a = np.cos(theta)
+    b = np.sin(theta)
+    return np.array([a, b, -rho])
+
+# Function to find the intersection of two homogeneous lines
+def find_intersection(line1, line2):
+    x, y, w = np.cross(line1, line2)  # Cross product
+    if w == 0:  # Lines are parallel
+        cprint("Lines are parallel, no intersection!!!", "red")
         return None
-    A = np.array([
-        [np.cos(theta1), np.sin(theta1)],
-        [np.cos(theta2), np.sin(theta2)]
-    ])
-    b = np.array([rho1, rho2])
-    # Solve the linear system to find the intersection point
-    x, y = np.linalg.solve(A, b)
-    return x, y
+    return int(x / w), int(y / w)
 
+# Calculate homogeneous form from two rho values representing x-intercepts
+def calculate_homogeneous_line(rho1, rho2, image_height):
+    # Define two points on the line
+    # X intercept and then the second point uses a large y-value (approaching infinity i.e image height):
+    x1, y1 = rho1, 0
+    x2, y2 = rho2, image_height  
+    # Compute homogeneous coordinates (a, b, c) for the line
+    a = y1 - y2
+    b = x2 - x1
+    c = x1 * y2 - x2 * y1
+    return np.array([a, b, c])
 
-# Main function to process each image in the dataset
+# Detect corners (intersections) from image
+def detect_corners(image, image_num, corner_params=[400, 300, 50, 10, np.pi / 90, 10], pic_num=0):
+    canny_thresh1, canny_thresh2, houghs_thresh, rho_lines_thresh, theta_thresh, corner_thresh = corner_params
+
+    # Convert to grayscale and apply edge detection
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, canny_thresh1, canny_thresh2)
+    dilated_edges = cv2.dilate(edges, np.ones((3, 3), np.uint8), iterations=1)
+
+    # Save edge images
+    ensure_directory("MyResults/Edges")
+    cv2.imwrite(f'MyResults/Edges/Pic_{pic_num}edges.jpg', edges)
+    cv2.imwrite(f'MyResults/Edges/Pic_{pic_num}dilated_edges.jpg', dilated_edges)
+
+    # Hough Transform to detect lines in polar coordinates
+    lines = cv2.HoughLines(edges, 1, np.pi / 180, houghs_thresh, None, 0, 0)
+    line_img = image.copy()
+    line_test_img = image.copy()
+
+    # Separate lines into vertical and horizontal lines:
+    vertical_lines, horizontal_lines = [], []
+    if lines is not None:
+        for line in lines:
+            rho, theta = line[0]
+            if np.abs(theta) < np.pi / 4 or np.abs(theta) > 3 * np.pi / 4:
+                vertical_lines.append([rho, theta])
+            else:
+                horizontal_lines.append([rho, theta])
+    
+    # Initial clustering of lines (not perfect but groups lines approx. together):
+    vertical_lines = group_lines(vertical_lines, distance_threshold=10)
+    horizontal_lines = group_lines(horizontal_lines, distance_threshold=10)
+
+    # Cluster lines by their x_intercept to get exactly 8 vertical lines: and 10 horizontal lines
+    base_pts = list()
+    for line in vertical_lines:
+        rho, theta = line
+        # (x_intercept, 0):
+        x_intercept = rho / np.cos(theta)
+        # x at infinity:
+        x_upper = -line_test_img.shape[0] * np.tan(theta) + (rho / np.cos(theta))
+        # cv2.circle(line_test_img, (int(x_upper), image.shape[0]), 5, (0, 255, 0), -1)
+        # cv2.line(line_test_img, (int(x_intercept), 0), (int(x_upper), line_test_img.shape[0]), (0, 255, 0), 2)  
+        # Append as a 2D point with base and upper x-coordinates
+        base_pts.append([x_intercept, x_upper])
+    
+    # Check if we have enough points for clustering
+    if len(base_pts) >= 8:
+        # Convert to a 2D array and apply KMeans
+        base_pts_array = np.array(base_pts)
+        clustered_pts = KMeans(n_clusters=8, random_state=0).fit(base_pts_array)
+        # Extract cluster centers
+        test_lines = list()
+        # print(clustered_pts.cluster_centers_)
+        for p1, p2 in clustered_pts.cluster_centers_:
+            # Draw the clustered line
+            # cv2.circle(line_test_img, (int(p1), 0), 5, (255, 255, 0), -1)
+            # cv2.circle(line_test_img, (int(p2), line_test_img.shape[0]), 5, (255, 255, 0), -1)
+            cv2.line(line_test_img, (int(p1), 0), (int(p2), line_test_img.shape[0]), (0, 0, 255), 2)
+    else:
+        print("Not enough points for clustering. Found only", len(base_pts))
+    vertical_lines = clustered_pts.cluster_centers_
+    # cprint(f"Vertical Lines : {vertical_lines}", "cyan")
+    
+    # Cluster lines to get exactly 10 horizontal lines: (Apparently dont need to do this as it has the perfect numer already)
+    # for line in vertical_lines:
+    #     rho, theta = line
+    #     draw_polar_line(line_test_img, rho, theta)
+    
+    for line in horizontal_lines:
+        rho, theta = line
+        draw_polar_line(line_test_img, rho, theta, color=(255, 0, 0))
+    if len(horizontal_lines) != 10:
+        cprint(f"Image {image_num} has {len(horizontal_lines)} horizontal lines", "red")
+    if len(vertical_lines) != 8:
+        cprint(f"Image {image_num} has {len(vertical_lines)} vertical lines", "red")
+
+    
+    # Save the image with lines drawn:
+    ensure_directory("MyResults/HoughLines")
+    cv2.imwrite(f'MyResults/HoughLines/Pic_{pic_num}_lines.jpg', line_test_img)
+    # time.sleep(1)
+    
+    # Convert lines to homogeneous form for intersection calculation:
+    horizontal_homogeneous_lines = [to_homogeneous(np.array(h[0]), np.array(h[1])) for h in horizontal_lines]
+    # Vertical lines will be specified by their x-intercepts, because the cluster_centers_ are in that form (x_intercept, x_at_infinity) i.e (rho1, rho2):
+    # Need to sort so labeling is top-left to bottom-right:
+    # Since x[0] is the upper x-intercept, since 0,0 is at the top left corner sort according to the x-intercept:
+    sorted_v_lines = sorted(vertical_lines, key=lambda x: x[0]) 
+    vertical_homogeneous_lines = list()
+    # for rho1, rho2 in clustered_pts.cluster_centers_:
+    for rho1, rho2 in sorted_v_lines:
+        vertical_homogeneous_lines.append(calculate_homogeneous_line(rho1, rho2, line_test_img.shape[0]))
+    
+    cprint(f"Vertical Homogeneous line representation:\n {vertical_homogeneous_lines}", "cyan")
+    print()
+    cprint(f"Horizontal Homogeneous line representation:\n {horizontal_homogeneous_lines}", "cyan")
+    
+    # Using the homogeneous lines, find the intersections:
+    intersections = []
+    corner_img = image.copy()
+    for h in horizontal_homogeneous_lines:
+        for v in vertical_homogeneous_lines:
+            intersection = find_intersection(h, v)
+            if intersection:
+                intersections.append(intersection)
+                cv2.circle(line_test_img, intersection, 5, (0, 255, 255), -1)
+                cv2.putText(line_test_img, str(len(intersections)), (intersection[0]+5, intersection[1]-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                # cv2.circle(corner_img, intersection, 5, (0, 255, 255), -1)
+                # cv2.putText(corner_img, str(len(intersections)), (intersection[0]+5, intersection[1]-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+    cprint(f"Intersections: {intersections}", "cyan")
+
+    # Save the image with and lines corners drawn:
+    ensure_directory("MyResults/Corners")
+    # cv2.imwrite(f'MyResults/Corners/Pic_{pic_num}_corners.jpg', corner_img)
+    cv2.imwrite(f'MyResults/Corners/Pic_{pic_num}_corners.jpg', line_test_img)
+    # time.sleep(1)  # To prevent overwriting of images
+
+    # ensure_directory("TrialResults/ALL_LINES")
+    # cv2.imwrite(f'TrialResults/ALL_LINES/TEST_{pic_num}_lines.jpg', line_test_img)
+    # time.sleep(1)  # To prevent overwriting of images
+    
+    return intersections
+
+# Process images and detect corners
 def process_images(dataset_path):
     image_paths = [os.path.join(dataset_path, img) for img in os.listdir(dataset_path)]
-    all_image_corners = list()
-    temp = list()
-    i = 0
-    for idx, img_path in enumerate(image_paths):
-        # print(f"Processing image {idx + 1}/{len(image_paths)}...")
+    all_image_corners = []
+    for idx, img_path in tqdm(enumerate(image_paths)):
         image = cv2.imread(img_path)
-        # corners = detect_corners(image, save_img=True, output_name=f"Result_{idx + 1}")
-        corners = detect_corners(image, save_img=True, output_name=f"TEST")
+        corners = detect_corners(image, idx, pic_num=idx+1)
         all_image_corners.append(corners)
-        if len(corners) ==80:
-            temp.append(str(idx+1))
-            cprint(f"{i+1}. Image {idx+1} has {len(corners)} corners", "green")
-            i += 1
-    ensure_directory("MyResults/TestFiles/")
-    with open("MyResults/TestFiles/valid_image.txt", "w") as f:
-        for i in temp:
-            f.write(f"Pic_{str(i)}.jpg\n")
-            
     return all_image_corners
-"""========================================================= END of TASK 3.1  =========================================================="""
+
+
+"""========================================================= END of TASK 3.1 ========================================================="""
 
 
 def task1():
-    temp  = process_images(DATASET1_PATH)
-    all_image_corners = list()
+    # Task 3.1: Detect corners in images
+    temp = process_images(DATASET1_PATH)
+    all_image_corners = []
     for corners in temp:
-        # cprint(f"Number of Detected corners: {len(corners)}", "cyan")
-        if len(corners) == 80:
+        if len(corners) == 80:  # We expect 80 corners
             all_image_corners.append(corners)
-    # cprint(f"Number of images with 80 corners: {len(all_image_corners)}", "white")
+    cprint(f"Number of images with 80 corners: {len(all_image_corners)}", "white")
+    cprint("Task 1 completed successfully!", "green")
 
-
-    cprint("Task 1 completed successfully!", "green") 
 
 def task2():
     pass
 
 
-
 if __name__ == "__main__":
-    # Create argument parser
-    parser = ArgumentParser(
-        description="Script to run Task 1 or Task 2. Use the arguments below to select the task.",
-        epilog="Example usage: python HW7.py --task 1"
-    )
-    # Add arguments to select task
-    parser.add_argument(
-        '--task', '-t', type=int, required=True, choices=[1, 2],
-        help="Select which task to run: 1 for Task 1, 2 for Task 2"
-    )
-
+    parser = ArgumentParser(description="Script to run Task 1 or Task 2.")
+    parser.add_argument('--task', '-t', type=int, required=True, choices=[1, 2], help="Select task: 1 for Task 1, 2 for Task 2")
     args = parser.parse_args()
-    # Ensure you're in the correct directory
-    cprint("Make sure you are running from HW8 directory!!!\n", "red")
-    ensure_directory(f"MyResults")
-    # Execute the task based on the argument provided
+
+    cprint("Make sure you are running from HW8 directory!!!", "red")
+    ensure_directory("MyResults")
+
     if args.task == 1:
         task1()
     elif args.task == 2:
