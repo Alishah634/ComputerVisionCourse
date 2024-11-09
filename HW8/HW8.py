@@ -45,7 +45,7 @@ def display_image(img, title="Image"):
 ''' END of Utility functions '''
     
     
-'''========================================================= TASK 3.1 ========================================================='''
+'''========================================================= TASK 3.2.1 ========================================================='''
 # Group lines by proximity based on rho values
 def group_lines(lines, distance_threshold=0.5):
     if not lines:
@@ -124,7 +124,7 @@ def calculate_homogeneous_line(rho1, rho2, image_height):
     return np.array([a, b, c])
 
 # Detect corners (intersections) from image
-def detect_corners(image, image_num, corner_params=[400, 300, 50, 10, np.pi / 90, 10], pic_num=0):
+def detect_corners(image, image_num, corner_params=[400, 300, 50, 10, np.pi / 90, 10], pic_num=None):
     canny_thresh1, canny_thresh2, houghs_thresh, rho_lines_thresh, theta_thresh, corner_thresh = corner_params
 
     # Convert to grayscale and apply edge detection
@@ -133,9 +133,10 @@ def detect_corners(image, image_num, corner_params=[400, 300, 50, 10, np.pi / 90
     dilated_edges = cv2.dilate(edges, np.ones((3, 3), np.uint8), iterations=1)
 
     # Save edge images
-    ensure_directory("MyResults/Edges")
-    cv2.imwrite(f'MyResults/Edges/Pic_{pic_num}edges.jpg', edges)
-    cv2.imwrite(f'MyResults/Edges/Pic_{pic_num}dilated_edges.jpg', dilated_edges)
+    if pic_num is not None:
+        ensure_directory("MyResults/Edges")
+        cv2.imwrite(f'MyResults/Edges/Pic_{pic_num}edges.jpg', edges)
+        cv2.imwrite(f'MyResults/Edges/Pic_{pic_num}dilated_edges.jpg', dilated_edges)
 
     # Hough Transform to detect lines in polar coordinates
     lines = cv2.HoughLines(edges, 1, np.pi / 180, houghs_thresh, None, 0, 0)
@@ -184,6 +185,7 @@ def detect_corners(image, image_num, corner_params=[400, 300, 50, 10, np.pi / 90
             cv2.line(line_test_img, (int(p1), 0), (int(p2), line_test_img.shape[0]), (0, 0, 255), 2)
     else:
         print("Not enough points for clustering. Found only", len(base_pts))
+    
     vertical_lines = clustered_pts.cluster_centers_
     # cprint(f"Vertical Lines : {vertical_lines}", "cyan")
     
@@ -194,7 +196,8 @@ def detect_corners(image, image_num, corner_params=[400, 300, 50, 10, np.pi / 90
     
     for line in horizontal_lines:
         rho, theta = line
-        draw_polar_line(line_test_img, rho, theta, color=(255, 0, 0))
+        if pic_num is not None:
+            draw_polar_line(line_test_img, rho, theta, color=(255, 0, 0))
     if len(horizontal_lines) != 10:
         cprint(f"Image {image_num} has {len(horizontal_lines)} horizontal lines", "red")
     if len(vertical_lines) != 8:
@@ -202,10 +205,11 @@ def detect_corners(image, image_num, corner_params=[400, 300, 50, 10, np.pi / 90
 
     
     # Save the image with lines drawn:
-    ensure_directory("MyResults/HoughLines")
-    cv2.imwrite(f'MyResults/HoughLines/Pic_{pic_num}_lines.jpg', line_test_img)
-    # time.sleep(1)
-    
+    if pic_num is not None:
+        ensure_directory("MyResults/HoughLines")
+        cv2.imwrite(f'MyResults/HoughLines/Pic_{pic_num}_lines.jpg', line_test_img)
+        # time.sleep(1)
+        
     # Convert lines to homogeneous form for intersection calculation:
     horizontal_homogeneous_lines = [to_homogeneous(np.array(h[0]), np.array(h[1])) for h in horizontal_lines]
     # Vertical lines will be specified by their x-intercepts, because the cluster_centers_ are in that form (x_intercept, x_at_infinity) i.e (rho1, rho2):
@@ -217,9 +221,9 @@ def detect_corners(image, image_num, corner_params=[400, 300, 50, 10, np.pi / 90
     for rho1, rho2 in sorted_v_lines:
         vertical_homogeneous_lines.append(calculate_homogeneous_line(rho1, rho2, line_test_img.shape[0]))
     
-    cprint(f"Vertical Homogeneous line representation:\n {vertical_homogeneous_lines}", "cyan")
-    print()
-    cprint(f"Horizontal Homogeneous line representation:\n {horizontal_homogeneous_lines}", "cyan")
+    # cprint(f"Vertical Homogeneous line representation:\n {vertical_homogeneous_lines}", "cyan")
+    # print()
+    # cprint(f"Horizontal Homogeneous line representation:\n {horizontal_homogeneous_lines}", "cyan")
     
     # Using the homogeneous lines, find the intersections:
     intersections = []
@@ -229,47 +233,89 @@ def detect_corners(image, image_num, corner_params=[400, 300, 50, 10, np.pi / 90
             intersection = find_intersection(h, v)
             if intersection:
                 intersections.append(intersection)
-                cv2.circle(line_test_img, intersection, 5, (0, 255, 255), -1)
-                cv2.putText(line_test_img, str(len(intersections)), (intersection[0]+5, intersection[1]-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-                # cv2.circle(corner_img, intersection, 5, (0, 255, 255), -1)
-                # cv2.putText(corner_img, str(len(intersections)), (intersection[0]+5, intersection[1]-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                if pic_num is not None:
+                    cv2.circle(line_test_img, intersection, 5, (0, 255, 255), -1)
+                    cv2.putText(line_test_img, str(len(intersections)), (intersection[0]+5, intersection[1]-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                    # cv2.circle(corner_img, intersection, 5, (0, 255, 255), -1)
+                    # cv2.putText(corner_img, str(len(intersections)), (intersection[0]+5, intersection[1]-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
-    cprint(f"Intersections: {intersections}", "cyan")
+    # cprint(f"Intersections: {intersections}", "cyan")
 
     # Save the image with and lines corners drawn:
-    ensure_directory("MyResults/Corners")
-    # cv2.imwrite(f'MyResults/Corners/Pic_{pic_num}_corners.jpg', corner_img)
-    cv2.imwrite(f'MyResults/Corners/Pic_{pic_num}_corners.jpg', line_test_img)
-    # time.sleep(1)  # To prevent overwriting of images
+    if pic_num is not None:            
+        ensure_directory("MyResults/Corners")
+        # cv2.imwrite(f'MyResults/Corners/Pic_{pic_num}_corners.jpg', corner_img)
+        cv2.imwrite(f'MyResults/Corners/Pic_{pic_num}_corners.jpg', line_test_img)
+        # time.sleep(1)  # To prevent overwriting of images
 
     # ensure_directory("TrialResults/ALL_LINES")
     # cv2.imwrite(f'TrialResults/ALL_LINES/TEST_{pic_num}_lines.jpg', line_test_img)
     # time.sleep(1)  # To prevent overwriting of images
-    
+        
     return intersections
 
 # Process images and detect corners
 def process_images(dataset_path):
     image_paths = [os.path.join(dataset_path, img) for img in os.listdir(dataset_path)]
     all_image_corners = []
-    for idx, img_path in tqdm(enumerate(image_paths)):
-        image = cv2.imread(img_path)
+    for idx in tqdm(range(len(image_paths))):
+        image = cv2.imread(image_paths[idx])
         corners = detect_corners(image, idx, pic_num=idx+1)
+        # corners = detect_corners(image, idx)
         all_image_corners.append(corners)
     return all_image_corners
 
 
-"""========================================================= END of TASK 3.1 ========================================================="""
+"""========================================================= END of TASK 3.2.1 ========================================================="""
+
+"""========================================================= START of TASK 3.2 ========================================================="""
+# 3.2.2 Camera Calibration
+
+def calc_world_cords(grid_length:int = 10, num_vert: int = 8, num_horiz: int = 10) -> List[List[int]]:
+    # All of these input params are in inches.
+    # Generate x and y coordinates using lists
+    x = [i * grid_length for i in range(num_vert)]
+    y = [i * grid_length for i in range(num_horiz)]
+    # Manually create the mesh grid as lists of coordinate pairs
+    world_coords = []
+    for yi in y:
+        for xi in x:
+            world_coords.append([xi, yi])
+    return world_coords
+            
+def calc_intrinsic_params():
+    pass
+
+def calc_extrinsic_params():
+    pass
+
+def calc_radial_distortion_params():
+    pass
+
+def zhangs_algo(all_image_corners):
+    for row in (world_cords:= calc_world_cords()): print(row)
+    
+    pass
 
 
+
+"""========================================================= END of TASK 3.2 ========================================================="""
 def task1():
-    # Task 3.1: Detect corners in images
+    # Task 3.2.1: Detect corners of calibration pattern in images
     temp = process_images(DATASET1_PATH)
     all_image_corners = []
     for corners in temp:
         if len(corners) == 80:  # We expect 80 corners
             all_image_corners.append(corners)
     cprint(f"Number of images with 80 corners: {len(all_image_corners)}", "white")
+    
+    # Task 3.2.2: Zhang's algo for camera calibration:
+    zhangs_algo(all_image_corners)
+    
+    
+    
+    # print(calc_world_cords())
+    
     cprint("Task 1 completed successfully!", "green")
 
 
