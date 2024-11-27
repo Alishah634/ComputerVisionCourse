@@ -3,13 +3,22 @@
 *.pdf
 
 # # Ignore directories named 'MyImages', 'MyResults', 'ExtraCredit', 'Final_sub'
-# HW6_images/
 MyImages/
-MyImageResults/
+MyDataset/
+REFINED/
+TASK3Images/
+TEST_Dataset/
 MyResults/
-HW7-Auxilliary
-HW8-Files
+Final_SUB/
+
+HW9-Files
 Pickle_Files
+
+__pycache__/
+depth_map/__pycache__/
+depth_map/data
+depth_map/pics
+
 # MyVersion/
 # Final_Images/
 # Final_sub/
@@ -20,6 +29,10 @@ original.py
 originalV2.py
 trial.py
 *.tex
-*.jpg
-*.png
-*.jpeg
+
+HW9.py
+
+TASK_1/
+TASK_2/
+TASK_3/
+TASK_4/
