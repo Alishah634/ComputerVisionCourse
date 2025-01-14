@@ -86,8 +86,9 @@ if __name__ == "__main__":
         plot_image_and_depth(img0, depth0, img1, depth1, plot_name)      
 
         #(1) make meshgrid of points in image 0
-        x = np.linspace(10, img0.shape[1]-10, 100) # ignore a border of 10 pxls    
-        y = np.linspace(10, img0.shape[0]-10, 100)
+        # User should change the number of the pixels, to better visualize the ridges/structures found
+        x = np.linspace(10, img0.shape[1]-10, 10000) # ignore a border of 10 pxls    
+        y = np.linspace(10, img0.shape[0]-10, 10000)
         """
         <Student code>
         # meshgrid of x and y coordinates
