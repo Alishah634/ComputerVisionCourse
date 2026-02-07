@@ -1,0 +1,22 @@
+# PrevTest*/
+*.zip
+*.pdf
+
+# # Ignore directories named 'MyImages', 'MyResults', 'ExtraCredit', 'Final_sub'
+# HW6_images/
+MyImages/
+MyImageResults/
+MyResults/
+HW7-Auxilliary
+HW8-Files
+Pickle_Files
+# MyVersion/
+# Final_Images/
+# Final_sub/
+# ExtraCredit/
+Numpy_Files/
+
+original.py
+originalV2.py
+trial.py
+*.tex
