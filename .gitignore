@@ -23,3 +23,22 @@ trial.py
 *.jpg
 *.png
 *.jpeg
+
+# Python
+__pycache__/
+*.pyc
+
+# Numpy / data files
+*.npy
+*.npz
+
+# PyTorch models / weights
+*.pt
+weights/
+Task_2/AutoModels/
+
+# Docs (optional)
+*.doc
+
+# OS / misc
+.DS_Store
